@@ -1,17 +1,118 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
+import { api } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ENDPOINTS } from '../config/constants';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+
+interface LoginResponse {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    userName: string;
+    fullName: string;
+  };
+}
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      console.log('Sending login request with:', { email });
+      const response = await api.post<LoginResponse>(ENDPOINTS.AUTH.LOGIN, {
+        email,
+        password,
+      });
+
+      console.log('API Response:', {
+        success: response.success,
+        hasData: !!response.data,
+        message: response.message
+      });
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Login failed');
+      }
+      
+      if (response.data) {
+        const { token, user } = response.data;
+        console.log('Response data:', {
+          hasToken: !!token,
+          tokenLength: token?.length,
+          tokenPreview: token ? `${token.substring(0, 10)}...` : 'no token',
+          user: {
+            id: user?.id,
+            email: user?.email,
+            userName: user?.userName
+          }
+        });
+        
+        if (!token) {
+          throw new Error('No token received from server');
+        }
+
+        try {
+          await AsyncStorage.setItem('userToken', token);
+          const savedToken = await AsyncStorage.getItem('userToken');
+          console.log('Token saved in AsyncStorage:', !!savedToken);
+
+          await AsyncStorage.setItem('userData', JSON.stringify(user));
+          const savedUser = await AsyncStorage.getItem('userData');
+          console.log('User data saved in AsyncStorage:', !!savedUser);
+          
+          console.log('Attempting navigation to Dashboard...');
+          
+          try {
+            const navState = navigation.getState();
+            console.log('Navigation state before reset:', {
+              index: navState.index,
+              routeNames: navState.routeNames,
+              type: navState.type
+            });
+            
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Dashboard' }],
+            });
+            console.log('Navigation reset completed');
+          } catch (navError) {
+            console.error('Navigation reset failed:', navError);
+            console.log('Trying fallback navigation...');
+            navigation.navigate('Dashboard');
+          }
+        } catch (storageError) {
+          console.error('AsyncStorage error:', storageError);
+          Alert.alert('Error', 'Failed to save login data');
+        }
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed',
+        error.response?.data?.message || 'Invalid email or password'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -36,37 +137,52 @@ const LoginScreen = () => {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            editable={!isLoading}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              editable={!isLoading}
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Ionicons 
+                name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                size={24} 
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity 
-            style={styles.forgotPassword}
-            onPress={() => {/* Handle forgot password */}}
+            style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
+            onPress={handleLogin}
+            disabled={isLoading}
           >
-            <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.signInButton}
-            onPress={() => navigation.navigate('Dashboard')}
-          >
-            <Text style={styles.signInButtonText}>Sign in</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.signInButtonText}>Sign in</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={styles.createAccount}
             onPress={() => navigation.navigate('Register')}
+            disabled={isLoading}
           >
             <Text style={styles.createAccountText}>Create new account</Text>
           </TouchableOpacity>
 
+          {/* Tạm thời ẩn phần social login vì chưa implement
           <View style={styles.orContainer}>
             <View style={styles.orLine} />
             <Text style={styles.orText}>Or continue with</Text>
@@ -74,18 +190,28 @@ const LoginScreen = () => {
           </View>
 
           <View style={styles.socialButtons}>
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity 
+              style={styles.socialButton}
+              disabled={isLoading}
+            >
               <Ionicons name="logo-google" size={24} color="#000" />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity 
+              style={styles.socialButton}
+              disabled={isLoading}
+            >
               <Ionicons name="logo-facebook" size={24} color="#000" />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity 
+              style={styles.socialButton}
+              disabled={isLoading}
+            >
               <Ionicons name="logo-apple" size={24} color="#000" />
             </TouchableOpacity>
           </View>
+          */}
         </View>
       </View>
     </SafeAreaView>
@@ -135,13 +261,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
+  passwordContainer: {
+    position: 'relative',
+    marginBottom: 16,
   },
-  forgotPasswordText: {
-    color: '#1F41BB',
-    fontSize: 14,
+  passwordInput: {
+    height: 50,
+    backgroundColor: '#F1F4FF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingRight: 50,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 4,
   },
   signInButton: {
     height: 50,
@@ -150,6 +286,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  signInButtonDisabled: {
+    backgroundColor: '#B3B3B3',
   },
   signInButtonText: {
     color: '#FFFFFF',

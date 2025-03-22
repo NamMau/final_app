@@ -54,17 +54,25 @@ exports.login = async ({ email, password }) => {
     const user = await User.findOne({ email });
     if (!user) throw new Error("Invalid credentials");
 
-    console.log("User found:", user);  //Check user in DB
-    console.log("Input Password:", password);
-    console.log("Stored Hashed Password:", user.password);
+    console.log("\n=== Login Attempt ===");
+    console.log("User found:", {
+        id: user._id,
+        email: user.email,
+        userName: user.userName
+    });
+    console.log("Verifying password...");
 
     const isMatch = await bcrypt.compare(password, user.password);
-    console.log("Password Match Result:", isMatch);
+    console.log("Password Match:", isMatch);
 
     if (!isMatch) throw new Error("Invalid credentials");
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-    return token;
+    console.log("\nToken generated successfully!");
+    console.log("Token:", token);
+    console.log("===================\n");
+    
+    return { token, user };
 };
 
 exports.verifyToken = async (token) => {

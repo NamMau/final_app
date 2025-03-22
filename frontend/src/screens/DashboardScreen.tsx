@@ -208,7 +208,10 @@ const DashboardScreen = () => {
           <Text style={styles.navText}>Budgets</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navButton}>
+        <TouchableOpacity 
+          style={styles.navButton}
+          onPress={() => navigation.navigate('Profile')}
+        >
           <Ionicons name="person" size={24} color="#666" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>

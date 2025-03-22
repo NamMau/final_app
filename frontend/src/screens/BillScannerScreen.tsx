@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import * as ImagePicker from 'expo-image-picker';
+import { billsService } from '../services/bills.service';
 
 type BillScannerScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'BillScanner'>;
 
@@ -25,7 +26,7 @@ const BillScannerScreen = () => {
 
       // Launch camera
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
         allowsEditing: true,
         aspect: [4, 3],
@@ -33,13 +34,32 @@ const BillScannerScreen = () => {
 
       if (!result.canceled) {
         setImage(result.assets[0].uri);
-        // For now, we'll just show the image
-        // TODO: Implement server-side OCR processing
-        setScanning(false);
+        handleOCR(result.assets[0]);
       }
     } catch (error) {
       console.error('Error capturing image:', error);
       alert('Error capturing image. Please try again.');
+    }
+  };
+
+  const handleOCR = async (imageAsset: ImagePicker.ImagePickerAsset) => {
+    try {
+      setScanning(true);
+      
+      // Create a File object from the image URI
+      const response = await fetch(imageAsset.uri);
+      const blob = await response.blob();
+      const file = new File([blob], 'bill.jpg', { type: 'image/jpeg' });
+
+      // Send to backend for OCR processing
+      const result = await billsService.scanBill(file);
+      setScannedText(result.ocrText);
+
+    } catch (error) {
+      console.error('Error processing image:', error);
+      alert('Error processing image. Please try again.');
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -80,19 +100,6 @@ const BillScannerScreen = () => {
         >
           <Text style={styles.captureButtonText}>
             {image ? 'Retake Photo' : 'Take Photo'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.captureButton, { marginTop: 12, backgroundColor: image ? '#1F41BB' : '#B0B0B0' }]}
-          onPress={() => {
-            // TODO: Add logic to send image to server for OCR processing
-            alert('This feature will be implemented with server-side OCR processing');
-          }}
-          disabled={!image}
-        >
-          <Text style={styles.captureButtonText}>
-            Process Image
           </Text>
         </TouchableOpacity>
 

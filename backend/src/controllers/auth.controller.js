@@ -17,8 +17,28 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
     try {
-        const token = await authService.login(req.body);
-        res.status(200).json({ success: true, token });
+        const { token, user } = await authService.login(req.body);
+        console.log('\n=== Login Successful ===');
+        console.log('Generated Token:', token);
+        console.log('User:', {
+            id: user._id,
+            email: user.email,
+            userName: user.userName
+        });
+        console.log('=====================\n');
+        
+        res.status(200).json({ 
+            success: true, 
+            data: {
+                token,
+                user: {
+                    id: user._id,
+                    email: user.email,
+                    userName: user.userName,
+                    fullName: user.fullName
+                }
+            }
+        });
     } catch (error) {
         res.status(401).json({ success: false, message: error.message });
     }

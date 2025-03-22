@@ -5,4 +5,5 @@ export type RootStackParamList = {
   Dashboard: undefined;
   Category: undefined;
   BillScanner: undefined;
+  Profile: undefined;
 }; 

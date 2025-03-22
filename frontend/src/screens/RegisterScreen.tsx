@@ -1,85 +1,225 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { api } from '../services/api';
+import { ENDPOINTS } from '../config/constants';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
+interface RegisterResponse {
+  message: string;
+  user: {
+    id: string;
+    userName: string;
+    email: string;
+    fullName: string;
+  };
+}
+
+const validateEmail = (email: string) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 const RegisterScreen = () => {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const [userName, setUserName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [address, setAddress] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDateOfBirth(selectedDate);
+    }
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const handleRegister = async () => {
+    if (!userName || !fullName || !email || !password || !phoneNumber || !address) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    if (password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await api.post<RegisterResponse>(ENDPOINTS.AUTH.REGISTER, {
+        userName,
+        fullName,
+        email,
+        password,
+        dateOfBirth: dateOfBirth.toISOString(),
+        phoneNumber,
+        address
+      });
+
+      if (response.data) {
+        Alert.alert(
+          'Success',
+          'Registration successful! Please login to continue.',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.replace('Login')
+            }
+          ]
+        );
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      Alert.alert(
+        'Registration Failed',
+        error.response?.data?.message || 'An error occurred during registration'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create Account</Text>
-      <Text style={styles.subtitle}>Create an account so you can manage you finance</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.subtitle}>Create an account so you can manage your finance</Text>
 
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm Password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-        />
-
-        <TouchableOpacity 
-          style={styles.signUpButton}
-          onPress={() => {/* Handle sign up */}}
-        >
-          <Text style={styles.signUpButtonText}>Sign up</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.loginAccount}
-          onPress={() => navigation.navigate('Login')}
-        >
-          <Text style={styles.loginAccountText}>Already have an account</Text>
-        </TouchableOpacity>
-
-        <View style={styles.orContainer}>
-          <View style={styles.orLine} />
-          <Text style={styles.orText}>Or continue with</Text>
-          <View style={styles.orLine} />
-        </View>
-
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-google" size={24} color="#000" />
-          </TouchableOpacity>
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            placeholder="Username"
+            value={userName}
+            onChangeText={setUserName}
+            autoCapitalize="none"
+            editable={!isLoading}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Full Name"
+            value={fullName}
+            onChangeText={setFullName}
+            editable={!isLoading}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!isLoading}
+          />
           
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-facebook" size={24} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              editable={!isLoading}
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Ionicons 
+                name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                size={24} 
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
           
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-apple" size={24} color="#000" />
+          <TouchableOpacity 
+            style={styles.dateInput}
+            onPress={() => setShowDatePicker(true)}
+            disabled={isLoading}
+          >
+            <Text style={styles.dateText}>
+              {dateOfBirth ? formatDate(dateOfBirth) : 'Select Date of Birth'}
+            </Text>
+            <Ionicons name="calendar-outline" size={24} color="#666" />
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={dateOfBirth}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+              minimumDate={new Date(1900, 0, 1)}
+            />
+          )}
+
+          <TextInput
+            style={styles.input}
+            placeholder="Phone Number"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            keyboardType="phone-pad"
+            editable={!isLoading}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Address"
+            value={address}
+            onChangeText={setAddress}
+            multiline
+            editable={!isLoading}
+          />
+
+          <TouchableOpacity 
+            style={[styles.signUpButton, isLoading && styles.signUpButtonDisabled]}
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.signUpButtonText}>Sign up</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.loginAccount}
+            onPress={() => navigation.navigate('Login')}
+            disabled={isLoading}
+          >
+            <Text style={styles.loginAccountText}>Already have an account</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -87,7 +227,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  content: {
     padding: 24,
+    paddingBottom: 40,
   },
   title: {
     fontSize: 30,
@@ -113,6 +256,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
+  passwordContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    height: 50,
+    backgroundColor: '#F1F4FF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingRight: 50,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 4,
+  },
+  dateInput: {
+    height: 50,
+    backgroundColor: '#F1F4FF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#000000',
+  },
   signUpButton: {
     height: 50,
     backgroundColor: '#1F41BB',
@@ -120,6 +295,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  signUpButtonDisabled: {
+    backgroundColor: '#B3B3B3',
   },
   signUpButtonText: {
     color: '#FFFFFF',
@@ -133,38 +311,6 @@ const styles = StyleSheet.create({
   loginAccountText: {
     color: '#000000',
     fontSize: 14,
-  },
-  orContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E0E0E0',
-  },
-  orText: {
-    color: '#666666',
-    marginHorizontal: 16,
-    fontSize: 14,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  socialButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    backgroundColor: '#F1F4FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  socialIcon: {
-    width: 24,
-    height: 24,
   },
 });
 

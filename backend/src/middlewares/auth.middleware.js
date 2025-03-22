@@ -1,12 +1,23 @@
 const { verifyToken } = require("../utils/tokenUtils");
 
+// List of routes that don't require token verification
+const publicRoutes = [
+    '/api/auth/login',
+    '/api/auth/register'
+];
+
 exports.authMiddleware = async (req, res, next) => {
-    const authHeader = req.header("Authorization"); // Lấy token từ headers
+    // Skip token verification for public routes
+    if (publicRoutes.includes(req.path)) {
+        return next();
+    }
+
+    const authHeader = req.header("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ message: "Access Denied" });
     }
 
-    const token = authHeader.split(" ")[1]; // Lấy phần token sau "Bearer "
+    const token = authHeader.split(" ")[1];
     try {
         const decoded = await verifyToken(token);
         req.user = decoded;

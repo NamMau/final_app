@@ -15,7 +15,19 @@ const PORT = process.env.PORT || 4000;
 const API_PASSWORD = process.env.API_PASSWORD; // Lấy mật khẩu API từ .env
 connectDB();
 
-app.use(cors());
+// CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:19006',  // Expo web
+    'http://localhost:19000',  // Expo development server
+    'exp://192.168.1.15:8081' // Expo mobile
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(helmet());
 app.use(morgan("dev"));
 app.use(express.json());
