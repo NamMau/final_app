@@ -5,21 +5,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ENDPOINTS } from '../config/constants';
+import { authService } from '../services/auth.service';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
-
-interface LoginResponse {
-  token: string;
-  user: {
-    id: string;
-    email: string;
-    userName: string;
-    fullName: string;
-  };
-}
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
@@ -36,72 +24,27 @@ const LoginScreen = () => {
 
     try {
       setIsLoading(true);
-      console.log('Sending login request with:', { email });
-      const response = await api.post<LoginResponse>(ENDPOINTS.AUTH.LOGIN, {
-        email,
-        password,
-      });
-
-      console.log('API Response:', {
-        success: response.success,
-        hasData: !!response.data,
-        message: response.message
-      });
+      await authService.login(email, password);
       
-      if (!response.success) {
-        throw new Error(response.message || 'Login failed');
-      }
+      console.log('Attempting navigation to Dashboard...');
       
-      if (response.data) {
-        const { token, user } = response.data;
-        console.log('Response data:', {
-          hasToken: !!token,
-          tokenLength: token?.length,
-          tokenPreview: token ? `${token.substring(0, 10)}...` : 'no token',
-          user: {
-            id: user?.id,
-            email: user?.email,
-            userName: user?.userName
-          }
+      try {
+        const navState = navigation.getState();
+        console.log('Navigation state before reset:', {
+          index: navState.index,
+          routeNames: navState.routeNames,
+          type: navState.type
         });
         
-        if (!token) {
-          throw new Error('No token received from server');
-        }
-
-        try {
-          await AsyncStorage.setItem('userToken', token);
-          const savedToken = await AsyncStorage.getItem('userToken');
-          console.log('Token saved in AsyncStorage:', !!savedToken);
-
-          await AsyncStorage.setItem('userData', JSON.stringify(user));
-          const savedUser = await AsyncStorage.getItem('userData');
-          console.log('User data saved in AsyncStorage:', !!savedUser);
-          
-          console.log('Attempting navigation to Dashboard...');
-          
-          try {
-            const navState = navigation.getState();
-            console.log('Navigation state before reset:', {
-              index: navState.index,
-              routeNames: navState.routeNames,
-              type: navState.type
-            });
-            
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Dashboard' }],
-            });
-            console.log('Navigation reset completed');
-          } catch (navError) {
-            console.error('Navigation reset failed:', navError);
-            console.log('Trying fallback navigation...');
-            navigation.navigate('Dashboard');
-          }
-        } catch (storageError) {
-          console.error('AsyncStorage error:', storageError);
-          Alert.alert('Error', 'Failed to save login data');
-        }
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Dashboard' }],
+        });
+        console.log('Navigation reset completed');
+      } catch (navError) {
+        console.error('Navigation reset failed:', navError);
+        console.log('Trying fallback navigation...');
+        navigation.navigate('Dashboard');
       }
     } catch (error: any) {
       console.error('Login error:', error);

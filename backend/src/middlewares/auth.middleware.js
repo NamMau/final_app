@@ -2,8 +2,8 @@ const { verifyToken } = require("../utils/tokenUtils");
 
 // List of routes that don't require token verification
 const publicRoutes = [
-    '/api/auth/login',
-    '/api/auth/register'
+    '/auth/login',
+    '/auth/register'
 ];
 
 exports.authMiddleware = async (req, res, next) => {

@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const multer = require("multer");
 const connectDB = require("./src/config/database");
 const routes = require("./src/routes"); // Import index.js của routes
 const { globalErrorHandler } = require("./src/utils/errorHandler");
@@ -15,22 +16,41 @@ const PORT = process.env.PORT || 4000;
 const API_PASSWORD = process.env.API_PASSWORD; // Lấy mật khẩu API từ .env
 connectDB();
 
+// Configure multer for handling file uploads
+const storage = multer.memoryStorage(); // Store files in memory
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // Limit file size to 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// Make upload middleware available globally
+app.locals.upload = upload;
+
 // CORS configuration
 const corsOptions = {
-  origin: [
-    'http://localhost:19006',  // Expo web
-    'http://localhost:19000',  // Expo development server
-    'exp://192.168.1.15:8081' // Expo mobile
-  ],
+  origin: true, // Allow all origins in development
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
   credentials: true
 };
 
 app.use(cors(corsOptions));
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increase payload limit for base64 images
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Middleware check api key
 app.use((req, res, next) => {
@@ -50,11 +70,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-});
-
-
 // Rate limiter to reducing spam requests
 app.use("/api", apiLimiter);
 
@@ -71,5 +86,9 @@ app.get("/", (req, res) => {
 
 // Global error handler
 app.use(globalErrorHandler);
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
+});
 
 module.exports = app;

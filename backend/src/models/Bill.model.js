@@ -1,11 +1,19 @@
 const mongoose = require('mongoose');
 
-const BillSchema = new mongoose.Schema({
-    userID: {type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true},
-    billName: {type: String, required: true},
-    amount: {type: Number, required: true},
-    dueDate : {type: Date, required: true},
-    status: {type: String, enum: ['paid', 'unpaid'], default: 'unpaid'},
+const billSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    date: { type: Date, required: true },
+    total: { type: Number, required: true },
+    items: [{
+        name: { type: String, required: true },
+        quantity: { type: Number, required: true },
+        price: { type: Number, required: true }
+    }],
+    image: { type: String }, // Store base64 image
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Bill', BillSchema);
+const Bill = mongoose.model('Bill', billSchema);
+
+module.exports = { Bill };

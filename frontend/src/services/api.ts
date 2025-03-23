@@ -40,7 +40,8 @@ class ApiService {
         throw new Error(data?.message || 'Request failed');
       }
 
-      return { success: true, data, message: data.message };
+      // Return the response data directly without wrapping it again
+      return data;
     } catch (error: unknown) {
       const apiError = error as ApiError;
       return { success: false, message: apiError.message || 'An error occurred' };

@@ -1,54 +1,86 @@
 import { api } from './api';
 import { ENDPOINTS } from '../config/constants';
 
+export interface BillItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
 export interface Bill {
-  _id?: string;
-  userID: string;
-  billName: string;
-  amount: number;
-  dueDate: Date;
-  status: 'paid' | 'unpaid';
-  imageUrl?: string;
-  ocrText?: string;
+  id: string;
+  userId: string;
+  date: Date;
+  total: number;
+  items: BillItem[];
+  image?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-class BillsService {
-  async getAllBills(): Promise<Bill[]> {
-    const response = await api.get<Bill[]>(ENDPOINTS.BILLS.LIST);
-    return response.data || [];
-  }
-
-  async createBill(billData: Omit<Bill, '_id'>): Promise<Bill> {
-    const billWithDefaults = {
-      ...billData,
-      status: billData.status || 'unpaid'
-    };
-    const response = await api.post<Bill>(ENDPOINTS.BILLS.CREATE, billWithDefaults);
-    return response.data!;
-  }
-
-  async updateBill(id: string, billData: Partial<Bill>): Promise<Bill> {
-    const response = await api.put<Bill>(ENDPOINTS.BILLS.UPDATE(id), billData);
-    return response.data!;
-  }
-
-  async deleteBill(id: string): Promise<void> {
-    await api.delete(ENDPOINTS.BILLS.DELETE(id));
-  }
-
-  async scanBill(imageFile: any): Promise<{ ocrText: string }> {
-    const response = await api.uploadFile<{ ocrText: string }>(ENDPOINTS.BILLS.SCAN, imageFile);
-    return response.data!;
-  }
-
-  async markAsPaid(id: string): Promise<Bill> {
-    return this.updateBill(id, { status: 'paid' });
-  }
-
-  async getBillsByStatus(status: 'paid' | 'unpaid'): Promise<Bill[]> {
-    const allBills = await this.getAllBills();
-    return allBills.filter(bill => bill.status === status);
-  }
+export interface ScanBillResponse {
+  success: boolean;
+  data: {
+    bill: Bill;
+  };
 }
 
-export const billsService = new BillsService(); 
+export const billsService = {
+  // Scan bill image
+  async scanBill(imageBase64: string): Promise<ScanBillResponse> {
+    try {
+      const response = await api.post<ScanBillResponse>(ENDPOINTS.BILLS.SCAN, {
+        imageBase64
+      });
+      if (!response.data) {
+        throw new Error('No data received from scan bill request');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error scanning bill:', error);
+      throw error;
+    }
+  },
+
+  // Update scanned bill
+  async updateScannedBill(billId: string, updates: Partial<Bill>): Promise<ScanBillResponse> {
+    try {
+      const response = await api.put<ScanBillResponse>(`${ENDPOINTS.BILLS.BASE}/scan/${billId}`, updates);
+      if (!response.data) {
+        throw new Error('No data received from update scanned bill request');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error updating scanned bill:', error);
+      throw error;
+    }
+  },
+
+  // Get all bills
+  async getBills(): Promise<Bill[]> {
+    try {
+      const response = await api.get<Bill[]>(ENDPOINTS.BILLS.LIST);
+      if (!response.data) {
+        return [];
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error getting bills:', error);
+      throw error;
+    }
+  },
+
+  // Get bill by ID
+  async getBillById(id: string): Promise<Bill> {
+    try {
+      const response = await api.get<Bill>(`${ENDPOINTS.BILLS.BASE}/${id}`);
+      if (!response.data) {
+        throw new Error('Bill not found');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error getting bill:', error);
+      throw error;
+    }
+  }
+}; 

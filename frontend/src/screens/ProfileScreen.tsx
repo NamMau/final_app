@@ -33,10 +33,24 @@ const ProfileScreen = () => {
     const loadUserData = async () => {
       try {
         const userDataString = await AsyncStorage.getItem('userData');
+        console.log('Raw user data from AsyncStorage:', userDataString);
+        
         if (userDataString) {
           const data = JSON.parse(userDataString);
+          console.log('Parsed user data:', {
+            id: data.id,
+            userName: data.userName,
+            email: data.email,
+            fullName: data.fullName,
+            phoneNumber: data.phoneNumber,
+            address: data.address,
+            dateOfBirth: data.dateOfBirth,
+            createdAt: data.createdAt,
+            accountInfo: data.accountInfo
+          });
           setUserData(data);
-          console.log('Loaded user data:', data);
+        } else {
+          console.log('No user data found in AsyncStorage');
         }
       } catch (error) {
         console.error('Error loading user data:', error);
