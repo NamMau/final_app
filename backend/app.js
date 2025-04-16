@@ -37,6 +37,23 @@ const upload = multer({
 app.locals.upload = upload;
 
 // CORS configuration
+// const corsOptions = {
+//   origin: ['http://localhost:3000', 'http://localhost:4000', 'http://localhost:8081', 
+//            'http://192.168.1.7:4000', 'http://192.168.1.7:3000', 
+//            'exp://192.168.1.12:8081', 'exp://192.168.1.7:8081', 'exp://192.168.1.15:8081'],
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+//   allowedHeaders: [
+//     'Content-Type', 
+//     'Authorization', 
+//     'x-api-key',
+//     'Accept',
+//     'Origin',
+//     'X-Requested-With'
+//   ],
+//   exposedHeaders: ['Content-Range', 'X-Content-Range'],
+//   credentials: true,
+//   maxAge: 86400 // 24 hours
+// };
 const corsOptions = {
   origin: true, // Allow all origins in development
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -48,18 +65,38 @@ app.use(cors(corsOptions));
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
+
 app.use(morgan("dev"));
 app.use(express.json({ limit: '10mb' })); // Increase payload limit for base64 images
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Log all incoming requests
+app.use((req, res, next) => {
+  console.log('\n=== New Request ===');
+  console.log('Time:', new Date().toISOString());
+  console.log('Method:', req.method);
+  console.log('URL:', req.originalUrl);
+  console.log('IP:', req.ip);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  console.log('==================\n');
+  next();
+});
+
 // Middleware check api key
 app.use((req, res, next) => {
+  console.log('\n=== Checking API Key ===');
+  console.log('Received API Key:', req.headers["x-api-key"]);
+  console.log('Expected API Key:', API_PASSWORD);
+  
   const apiPassword = req.headers["x-api-key"];
-
   if (!apiPassword || apiPassword !== API_PASSWORD) {
+      console.log('❌ Invalid API Key');
       return res.status(403).json({ message: "Forbidden: Invalid API Password" });
   }
   
+  console.log('✅ API Key Valid');
   next();
 });
 

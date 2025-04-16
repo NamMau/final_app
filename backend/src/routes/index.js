@@ -12,14 +12,15 @@ const accountRoutes = require("./account.routes");
 
 const router = express.Router();
 
-router.use("/auth", authRoutes);
-router.use("/user", userRoutes);
-router.use("/bills", billRoutes);
-router.use("/categories", categoryRoutes);
-router.use("/budgets", budgetRoutes);
-router.use("/loans", loanRoutes);
-router.use("/goals", goalRoutes);
-router.use("/notifications", notificationRoutes);
-router.use("/account", accountRoutes);
+// API v1 routes
+router.use("/v1/auth", authRoutes);
+router.use("/v1/users", userRoutes);
+router.use("/v1/categories", categoryRoutes);
+router.use("/v1/budgets", budgetRoutes);
+router.use("/v1/accounts", accountRoutes);
+router.use("/v1/goals", goalRoutes);
+router.use("/v1/loans", loanRoutes);
+router.use("/v1/bills", billRoutes);
+router.use("/v1/notifications", notificationRoutes);
 
 module.exports = router;

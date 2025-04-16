@@ -1,16 +1,23 @@
 const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
+dotenv.config();
 
-const generateToken = (userID) => {
-    return jwt.sign({ userID }, process.env.JWT_SECRET, { expiresIn: "7d" });
+// Generate an access token
+exports.generateAccessToken = (userId) => {
+    return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
 
-const verifyToken = (token) => {
-    return new Promise((resolve, reject) => {
-        jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-            if (err) reject(err);
-            else resolve(decoded);
-        });
-    });
+// Generate a refresh token
+exports.generateRefreshToken = (userId) => {
+    return jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, { expiresIn: "30d" });
 };
 
-module.exports = { generateToken, verifyToken };
+// Verify an access token
+exports.verifyAccessToken = (token) => {
+    return jwt.verify(token, process.env.JWT_SECRET);
+};
+
+// Verify a refresh token
+exports.verifyRefreshToken = (refreshToken) => {
+    return jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+};

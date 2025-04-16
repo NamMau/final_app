@@ -10,10 +10,10 @@ const { authMiddleware } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
-router.post("/", authMiddleware, createAccount);
-router.get("/:id", authMiddleware, getAccountById);
-router.get("/", authMiddleware, getAllAccounts);
-router.put("/:id", authMiddleware, updateAccount);
-router.delete("/:id", authMiddleware, deleteAccount);
+router.post("/create-account", authMiddleware, createAccount);
+router.get("/get-account-by-id/:id", authMiddleware, getAccountById);
+router.get("/get-all-accounts", authMiddleware, getAllAccounts);
+router.put("/update-account/:id", authMiddleware, updateAccount);
+router.delete("/delete-account/:id", authMiddleware, deleteAccount);
 
 module.exports = router;

@@ -3,10 +3,30 @@ const { billService } = require('../services/bill.service');
 
 const createBill = async (req, res) => {
     try {
-        const { billName, amount, dueDate } = req.body;
+        const { 
+            billName, 
+            amount, 
+            categoryID,
+            description,
+            dueDate,
+            type,
+            location,
+            tags 
+        } = req.body;
         const userId = req.user.id;
 
-        const bill = await billService.createBill(userId, billName, amount, dueDate);
+        const bill = await billService.createBill({
+            userId,
+            billName,
+            amount,
+            categoryID,
+            description,
+            dueDate,
+            type,
+            location,
+            tags
+        });
+
         return res.status(201).json({
             success: true,
             data: { bill }
@@ -24,7 +44,8 @@ const createBill = async (req, res) => {
 const getBills = async (req, res) => {
     try {
         const userId = req.user.id;
-        const bills = await billService.getBills(userId);
+        const { type, status, categoryID } = req.query;
+        const bills = await billService.getBills(userId, { type, status, categoryID });
         return res.status(200).json({
             success: true,
             data: { bills }
@@ -68,10 +89,28 @@ const getBillById = async (req, res) => {
 const updateBillById = async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
+        const { 
+            billName,
+            amount,
+            categoryID,
+            description,
+            dueDate,
+            status,
+            location,
+            tags 
+        } = req.body;
         const userId = req.user.id;
 
-        const bill = await billService.updateBill(id, updateData);
+        const bill = await billService.updateBill(id, {
+            billName,
+            amount,
+            categoryID,
+            description,
+            dueDate,
+            status,
+            location,
+            tags
+        });
         
         if (!bill) {
             return res.status(404).json({
@@ -110,7 +149,8 @@ const deleteBillById = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Bill deleted successfully'
+            message: 'Bill deleted successfully',
+            data: null
         });
     } catch (error) {
         console.error('Error in deleteBillById controller:', error);
@@ -128,7 +168,8 @@ const deleteBills = async (req, res) => {
         await billService.deleteAllBills();
         return res.status(200).json({
             success: true,
-            message: 'All bills deleted successfully'
+            message: 'All bills deleted successfully',
+            data: null
         });
     } catch (error) {
         console.error('Error in deleteBills controller:', error);
@@ -153,7 +194,10 @@ const scanBill = async (req, res) => {
         }
 
         const result = await billService.scanBill(userId, image);
-        return res.status(200).json(result);
+        return res.status(200).json({
+            success: true,
+            data: {result}
+        });
     } catch (error) {
         console.error('Error in scanBill controller:', error);
         return res.status(500).json({
@@ -171,7 +215,7 @@ const updateScannedBill = async (req, res) => {
         const userId = req.user.id;
 
         const result = await billService.updateScannedBill(userId, billId, { items });
-        return res.status(200).json(result);
+        return res.status(200).json({success: true, data: {result}});
     } catch (error) {
         console.error('Error in updateScannedBill controller:', error);
         return res.status(500).json({

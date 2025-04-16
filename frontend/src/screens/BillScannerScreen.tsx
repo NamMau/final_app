@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -62,138 +63,264 @@ export default function BillScannerScreen() {
     return new Date(date).toLocaleDateString('vi-VN');
   };
 
+  const handleManualEntry = () => {
+    navigation.navigate('CreateExpense');
+  };
+
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Bill Scanner</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.navigate('Dashboard')}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Bills</Text>
+            <Text style={styles.headerSubtitle}>Scan or add bills</Text>
+          </View>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.notificationButton}>
+            <Ionicons name="notifications-outline" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: 'https://i.pravatar.cc/100' }}
+            style={styles.avatar}
+          />
+        </View>
       </View>
 
-      <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-        <Ionicons name="camera" size={24} color="#fff" />
-        <Text style={styles.uploadButtonText}>Pick a bill image</Text>
-      </TouchableOpacity>
-
-      {image && (
-        <Image
-          source={{ uri: `data:image/jpeg;base64,${image}` }}
-          style={styles.previewImage}
-        />
-      )}
-
-      {loading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0000ff" />
-          <Text style={styles.loadingText}>Scanning bill...</Text>
-        </View>
-      )}
-
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-
-      {scannedBill && (
-        <View style={styles.resultContainer}>
-          <Text style={styles.resultTitle}>Scanned Bill Details</Text>
-          <Text style={styles.resultDate}>Date: {formatDate(scannedBill.date)}</Text>
-          
-          <View style={styles.itemsContainer}>
-            <Text style={styles.itemsTitle}>Items:</Text>
-            {scannedBill.items.map((item: BillItem, index: number) => (
-              <View key={index} style={styles.itemRow}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemQuantity}>x{item.quantity}</Text>
-                <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+      {/* Content */}
+      <View style={styles.content}>
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity style={styles.optionCard} onPress={pickImage}>
+              <View style={styles.optionIcon}>
+                <Ionicons name="camera" size={24} color="#1F41BB" />
               </View>
-            ))}
+              <Text style={styles.optionTitle}>Scan Bill</Text>
+              <Text style={styles.optionDescription}>Take a photo or upload bill image</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionCard} onPress={handleManualEntry}>
+              <View style={styles.optionIcon}>
+                <Ionicons name="create" size={24} color="#1F41BB" />
+              </View>
+              <Text style={styles.optionTitle}>Manual Entry</Text>
+              <Text style={styles.optionDescription}>Enter bill details manually</Text>
+            </TouchableOpacity>
           </View>
 
-          <Text style={styles.total}>
-            Total: {formatCurrency(scannedBill.total)}
-          </Text>
-        </View>
-      )}
-    </ScrollView>
+          {image && (
+            <View style={styles.previewCard}>
+              <Text style={styles.previewTitle}>Bill Preview</Text>
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${image}` }}
+                style={styles.previewImage}
+              />
+            </View>
+          )}
+
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1F41BB" />
+              <Text style={styles.loadingText}>Scanning bill...</Text>
+            </View>
+          )}
+
+          {error && (
+            <View style={styles.errorCard}>
+              <Ionicons name="alert-circle" size={24} color="#c62828" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {scannedBill && (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultTitle}>Scanned Bill Details</Text>
+              <Text style={styles.resultDate}>Date: {formatDate(scannedBill.date)}</Text>
+              
+              <View style={styles.itemsContainer}>
+                <Text style={styles.itemsTitle}>Items:</Text>
+                {scannedBill.items.map((item: BillItem, index: number) => (
+                  <View key={index} style={styles.itemRow}>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemQuantity}>Quantity: {item.quantity}</Text>
+                    </View>
+                    <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total Amount</Text>
+                <Text style={styles.totalAmount}>
+                  {formatCurrency(scannedBill.total)}
+                </Text>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#1F41BB',
   },
   header: {
+    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    gap: 15,
   },
-  backButton: {
-    marginRight: 16,
-  },
-  title: {
-    fontSize: 20,
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 32,
     fontWeight: 'bold',
   },
-  uploadButton: {
+  headerSubtitle: {
+    color: '#FFFFFF',
+    opacity: 0.8,
+    fontSize: 16,
+    marginTop: 4,
+  },
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007AFF',
-    padding: 16,
-    margin: 16,
-    borderRadius: 8,
+    gap: 15,
   },
-  uploadButtonText: {
-    color: '#fff',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
+  scrollView: {
+    flex: 1,
+    padding: 20,
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 24,
+  },
+  optionCard: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  optionTitle: {
     fontSize: 16,
-    marginLeft: 8,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  optionDescription: {
+    fontSize: 12,
+    color: '#666666',
+    textAlign: 'center',
+  },
+  previewCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 12,
   },
   previewImage: {
-    width: '90%',
-    height: 300,
-    alignSelf: 'center',
-    marginVertical: 16,
+    width: '100%',
+    height: 200,
     borderRadius: 8,
   },
   loadingContainer: {
+    padding: 24,
     alignItems: 'center',
-    padding: 16,
   },
   loadingText: {
-    marginTop: 8,
+    marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: '#666666',
   },
-  errorContainer: {
-    padding: 16,
+  errorCard: {
     backgroundColor: '#ffebee',
-    margin: 16,
-    borderRadius: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   errorText: {
     color: '#c62828',
     fontSize: 16,
+    flex: 1,
   },
-  resultContainer: {
+  resultCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
     padding: 16,
-    margin: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    marginBottom: 24,
   },
   resultTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: '#000000',
     marginBottom: 8,
   },
   resultDate: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: '#666666',
     marginBottom: 16,
   },
   itemsContainer: {
@@ -201,33 +328,52 @@ const styles = StyleSheet.create({
   },
   itemsTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 12,
   },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  itemInfo: {
+    flex: 1,
   },
   itemName: {
-    flex: 2,
     fontSize: 16,
+    color: '#000000',
+    marginBottom: 4,
   },
   itemQuantity: {
-    flex: 1,
-    fontSize: 16,
-    textAlign: 'center',
+    fontSize: 14,
+    color: '#666666',
   },
   itemPrice: {
-    flex: 1,
     fontSize: 16,
-    textAlign: 'right',
+    fontWeight: '500',
+    color: '#1F41BB',
   },
-  total: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'right',
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  totalAmount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F41BB',
   },
 }); 

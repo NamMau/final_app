@@ -6,18 +6,25 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { api } from '../services/api';
+import { apiService } from '../services/api';
 import { ENDPOINTS } from '../config/constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import SuccessRegister from '../components/SuccessRegister';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
 interface RegisterResponse {
   message: string;
+  token: string;
   user: {
     id: string;
     userName: string;
     email: string;
     fullName: string;
+  };
+  account: {
+    id: string;
+    totalBalance: number;
   };
 }
 
@@ -38,6 +45,7 @@ const RegisterScreen = () => {
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showSuccessRegister, setShowSuccessRegister] = useState(false);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -72,7 +80,7 @@ const RegisterScreen = () => {
 
     try {
       setIsLoading(true);
-      const response = await api.post<RegisterResponse>(ENDPOINTS.AUTH.REGISTER, {
+      const response = await apiService.post<RegisterResponse>(ENDPOINTS.AUTH.REGISTER, {
         userName,
         fullName,
         email,
@@ -83,16 +91,16 @@ const RegisterScreen = () => {
       });
 
       if (response.data) {
-        Alert.alert(
-          'Success',
-          'Registration successful! Please login to continue.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.replace('Login')
-            }
-          ]
-        );
+        // Save token and user data to AsyncStorage
+        await AsyncStorage.setItem('token', response.data.token);
+        await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+        await AsyncStorage.setItem('account', JSON.stringify(response.data.account));
+
+        setShowSuccessRegister(true);
+        setTimeout(() => {
+          setShowSuccessRegister(false);
+          navigation.replace('Login');
+        }, 2000);
       }
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -107,6 +115,10 @@ const RegisterScreen = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <SuccessRegister 
+        visible={showSuccessRegister} 
+        onClose={() => setShowSuccessRegister(false)}
+      />
       <View style={styles.content}>
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Create an account so you can manage your finance</Text>

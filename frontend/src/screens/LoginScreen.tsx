@@ -6,8 +6,25 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { authService } from '../services/auth.service';
+import { ENDPOINTS } from '../config/constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import SuccessModal from '../components/SuccessModal';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+
+interface LoginResponse {
+  message: string;
+  user: {
+    id: string;
+    userName: string;
+    email: string;
+    fullName: string;
+  };
+  account: {
+    id: string;
+    totalBalance: number;
+  };
+}
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
@@ -15,6 +32,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -24,33 +42,34 @@ const LoginScreen = () => {
 
     try {
       setIsLoading(true);
-      await authService.login(email, password);
+      console.log('Attempting login with:', { email });
+      const response = await authService.login(email, password);
+      console.log('Login successful:', response);
       
-      console.log('Attempting navigation to Dashboard...');
+      // Show success modal
+      setShowSuccessModal(true);
       
-      try {
-        const navState = navigation.getState();
-        console.log('Navigation state before reset:', {
-          index: navState.index,
-          routeNames: navState.routeNames,
-          type: navState.type
-        });
-        
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Dashboard' }],
-        });
-        console.log('Navigation reset completed');
-      } catch (navError) {
-        console.error('Navigation reset failed:', navError);
-        console.log('Trying fallback navigation...');
-        navigation.navigate('Dashboard');
-      }
+      // Navigate after a short delay
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        try {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Dashboard' }],
+          });
+        } catch (navError) {
+          console.error('Navigation reset failed:', navError);
+          navigation.navigate('Dashboard');
+        }
+      }, 2000);
+
     } catch (error: any) {
       console.error('Login error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Invalid email or password';
       Alert.alert(
         'Login Failed',
-        error.response?.data?.message || 'Invalid email or password'
+        errorMessage,
+        [{ text: 'OK' }]
       );
     } finally {
       setIsLoading(false);
@@ -59,6 +78,10 @@ const LoginScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <SuccessModal 
+        visible={showSuccessModal} 
+        onClose={() => setShowSuccessModal(false)}
+      />
       <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}

@@ -1,4 +1,4 @@
-import { api } from './api';
+import {apiService}  from './api';
 import { ENDPOINTS } from '../config/constants';
 
 export interface BillItem {

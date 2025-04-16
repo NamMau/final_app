@@ -1,43 +1,87 @@
 const User = require("../models/User.model");
-const {generateToken} = require("../utils/tokenUtils");
+const {generateAccessToken} = require("../utils/tokenUtils");
 const bcrypt = require("bcryptjs");
 console.log("Bcrypt module:", bcrypt);
 
-exports.createUser = async (userData) => {
-    const { userName, email, password } = userData;
-
+exports.createUser = async ({
+    userName,
+    email,
+    password,
+    phoneNumber,
+    address,
+    fullName,
+    dateOfBirth
+}) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) throw new Error("User already exists");
 
     const hashedPassword = await bcrypt.hash(password, 10); // Hash password
-    const user = new User({ userName, email, password: hashedPassword });
+    const user = new User({
+        userName,
+        email,
+        password: hashedPassword,
+        phoneNumber,
+        address,
+        fullName,
+        dateOfBirth
+    });
 
     await user.save();
-    return user;
+    const accessToken = generateAccessToken(user._id); // Generate access token
+    return {user, accessToken}; // Return user and access token
 };
 
 exports.getUserById = async (userId) => {
-    return await User.findById(userId);
+    return await User.findById(userId).select("-password");
 };
 
-exports.getAllUsers = async () => {
-    return await User.find({}, "-password"); // not return password
+exports.getUsers = async (filters = {}) => {
+    const query = {};
+    
+    // Apply filters
+    if (filters.userName) query.userName = { $regex: filters.userName, $options: 'i' };
+    if (filters.email) query.email = { $regex: filters.email, $options: 'i' };
+    if (filters.fullName) query.fullName = { $regex: filters.fullName, $options: 'i' };
+    
+    return await User.find(query).select("-password").sort({ createdAt: -1 });
 };
 
-exports.updateUser = async (userId, updateData) => {
-    if (updateData.password) {
-        updateData.password = await bcrypt.hash(updateData.password, 10); // Hash password if update
+exports.updateUser = async (userId, {
+    userName,
+    email,
+    password,
+    phoneNumber,
+    address,
+    fullName,
+    dateOfBirth
+}) => {
+    const updateData = {};
+    if (userName) updateData.userName = userName;
+    if (email) updateData.email = email;
+    if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    if (address) updateData.address = address;
+    if (fullName) updateData.fullName = fullName;
+    if (dateOfBirth) updateData.dateOfBirth = dateOfBirth;
+    
+    if (password) {
+        updateData.password = await bcrypt.hash(password, 10); // Hash password if update
     }
-    return await User.findByIdAndUpdate(userId, updateData, { new: true, runValidators: true });
+    if(email) {
+        const existingUser = await User.findOne({ email });
+        if (existingUser && existingUser._id.toString() !== userId) throw new Error("Email already exists");
+    }
+    
+    return await User.findByIdAndUpdate(userId, updateData, {new: true, runValidators: true}).select("-password");
 };
 
 exports.deleteUser = async (userId) => {
+    const deletedUser = await User.findByIdAndDelete(userId);
+    if (!deletedUser) throw new Error("User not found");
     return await User.findByIdAndDelete(userId);
 };
 
-
 exports.changePassword = async (userId, oldPassword, newPassword) => {
-    const user = await User.findById(userID);
+    const user = await User.findById(userId);
     if(!user) throw new Error("User not found");
 
     //Check is old password correct

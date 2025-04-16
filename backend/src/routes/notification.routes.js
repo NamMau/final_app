@@ -4,9 +4,9 @@ const { authMiddleware } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
-router.post("/", authMiddleware, createNotification);
-router.get("/", authMiddleware, getUserNotifications);
-router.put("/:id/read", authMiddleware, markAsRead);
-router.delete("/:id", authMiddleware, deleteNotification); 
+router.post("/create-notification", authMiddleware, createNotification);
+router.get("/get-user-notifications/:userID", authMiddleware, getUserNotifications);
+router.put("/mark-as-read/:id", authMiddleware, markAsRead);
+router.delete("/delete-notification/:id", authMiddleware, deleteNotification); 
 
 module.exports = router;

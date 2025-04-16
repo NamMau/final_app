@@ -5,11 +5,11 @@ const { changePassword } = require("../controllers/user.controller");
 
 const router = express.Router();
 
-router.post("/", createUser); // create user
-router.get("/", authMiddleware, getAllUsers); // get all users
-router.get("/profile/:id", authMiddleware, getUserById);
-router.put("/profile/:id", authMiddleware, updateUserById);
+router.post("/create-user", createUser); // create user
+router.get("/get-all-users", authMiddleware, getAllUsers); // get all users
+router.get("/get-user-by-id/:id", authMiddleware, getUserById);
+router.put("/update-user-by-id/:id", authMiddleware, updateUserById);
 router.put("/change-password", authMiddleware, changePassword); // change password
-router.delete("/profile/:id", authMiddleware, deleteUserById); // delete user
+router.delete("/delete-user-by-id/:id", authMiddleware, deleteUserById); // delete user
 
 module.exports = router;

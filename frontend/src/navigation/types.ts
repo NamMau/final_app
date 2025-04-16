@@ -6,4 +6,7 @@ export type RootStackParamList = {
   Category: undefined;
   BillScanner: undefined;
   Profile: undefined;
+  Budget: undefined;
+  Loan: undefined;
+  CreateExpense: undefined;
 }; 

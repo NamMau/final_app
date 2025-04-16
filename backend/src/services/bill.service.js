@@ -49,32 +49,67 @@ const parseBillText = (text) => {
     return result;
 };
 
-const createBill = async (userID, billName, amount, dueDate, status = "unpaid") => {
-    return await Bill.create({ user: userID, billName, amount, dueDate, status });
+const createBill = async ({ userID, billName, amount, dueDate, categoryID, description, type, location, tags, status = "unpaid" }) => {
+    const bill = await Bill.create({
+        user: userID,
+        billName,
+        amount,
+        dueDate,
+        category: categoryID,
+        description,
+        type,
+        location,
+        tags,
+        status
+    });
 };
 
-const getBills = async (userID) => {
-    return await Bill.find({ user: userID });
+const getBills = async (userID, filters = {}) => {
+    const query = { user: userID };
+    
+    // Apply filters
+    if (filters.status) query.status = filters.status;
+    if (filters.type) query.type = filters.type;
+    if (filters.category) query.category = filters.category;
+    if (filters.startDate && filters.endDate) {
+        query.dueDate = {
+            $gte: new Date(filters.startDate),
+            $lte: new Date(filters.endDate)
+        };
+    }
+    return await Bill.find(query).populate('category').sort({ dueDate: 1 });
 };
 
 const getBillById = async (billID) => {  
-    return await Bill.findById(billID);
+    return await Bill.findById(billID).populate('category');
 };
 
-const updateBill = async (billID, updateData) => { 
-    return await Bill.findByIdAndUpdate(billID, updateData, { new: true });
+const updateBill = async (billID, { billName, amount, dueDate, categoryID, description, type, location, tags, status }) => {
+    const updateData = {};
+    if (billName) updateData.billName = billName;
+    if (amount) updateData.amount = amount;
+    if (dueDate) updateData.dueDate = dueDate;
+    if (categoryID) updateData.category = categoryID;
+    if (description) updateData.description = description;
+    if (type) updateData.type = type;
+    if (location) updateData.location = location;
+    if (tags) updateData.tags = tags;
+    if (status) updateData.status = status;
+
+    return await Bill.findByIdAndUpdate(billID, updateData, { new: true }).populate('category');
 };
 
 const updateBillStatus = async (billID, status) => {
-    return await Bill.findByIdAndUpdate(billID, { status }, { new: true });
+    return await Bill.findByIdAndUpdate(billID, { status }, { new: true }).populate('category');
 };
 
 const deleteBill = async (billID) => {
     return await Bill.findByIdAndDelete(billID);
 };
 
-const deleteAllBills = async () => { 
-    return await Bill.deleteMany({});
+const deleteAllBills = async () => {
+    await Bill.deleteMany({});
+    return null;
 };
 
 const scanBill = async (userId, imageBase64) => {
@@ -97,28 +132,19 @@ const scanBill = async (userId, imageBase64) => {
         
         // Create new bill with parsed data
         const bill = new Bill({
-            userId,
+            user: userId,
             date: parsedData.date,
             total: parsedData.total,
             items: parsedData.items,
-            image: imageBase64
+            image: imageBase64,
+            type: 'receipt',
+            status: 'unpaid'
         });
 
         // Save the bill
         await bill.save();
 
-        return {
-            success: true,
-            data: {
-                bill: {
-                    id: bill._id,
-                    date: bill.date,
-                    total: bill.total,
-                    items: bill.items,
-                    image: bill.image
-                }
-            }
-        };
+        return bill;
     } catch (error) {
         console.error('Error in scanBill service:', error);
         throw new Error('Failed to scan bill');
@@ -127,7 +153,7 @@ const scanBill = async (userId, imageBase64) => {
 
 const updateScannedBill = async (userId, billId, updates) => {
     try {
-        const bill = await Bill.findOne({ _id: billId, userId });
+        const bill = await Bill.findOne({ _id: billId, user: userId });
 
         if (!bill) {
             throw new Error('Bill not found');
@@ -135,21 +161,18 @@ const updateScannedBill = async (userId, billId, updates) => {
 
         // Update bill with new data
         if (updates.items) bill.items = updates.items;
+        if (updates.total) bill.total = updates.total;
+        if (updates.date) bill.date = updates.date;
+        if (updates.type) bill.type = updates.type;
+        if (updates.status) bill.status = updates.status;
+        if (updates.category) bill.category = updates.category;
+        if (updates.description) bill.description = updates.description;
+        if (updates.location) bill.location = updates.location;
+        if (updates.tags) bill.tags = updates.tags;
 
         await bill.save();
 
-        return {
-            success: true,
-            data: {
-                bill: {
-                    id: bill._id,
-                    date: bill.date,
-                    total: bill.total,
-                    items: bill.items,
-                    image: bill.image
-                }
-            }
-        };
+        return bill;
     } catch (error) {
         console.error('Error in updateScannedBill service:', error);
         throw error;

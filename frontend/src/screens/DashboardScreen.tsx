@@ -1,63 +1,44 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { LineChart } from 'react-native-chart-kit';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 
-type TransactionType = 'income' | 'expense';
+const screenWidth = Dimensions.get('window').width;
 
-interface Transaction {
-  id: string;
-  type: TransactionType;
-  title: string;
-  subtitle: string;
-  amount: number;
-  date: string;
-  icon: string;
-}
+const chartConfig = {
+  backgroundGradientFrom: '#ffffff',
+  backgroundGradientTo: '#ffffff',
+  color: (opacity = 1) => `rgba(31, 65, 187, ${opacity})`,
+  strokeWidth: 2,
+  barPercentage: 0.5,
+  useShadowColorFromDataset: false,
+  propsForDots: {
+    r: '4',
+    strokeWidth: '2',
+    stroke: '#1F41BB'
+  },
+  propsForBackgroundLines: {
+    strokeWidth: 1,
+    stroke: '#e3e3e3',
+    strokeDasharray: '0',
+  },
+  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+};
 
-const transactions: Transaction[] = [
-  {
-    id: '1',
-    type: 'expense',
-    title: 'Grocery',
-    subtitle: 'Eataly downtown',
-    amount: 50.68,
-    date: 'Aug 26',
-    icon: 'basket-outline'
-  },
-  {
-    id: '2',
-    type: 'expense',
-    title: 'Transport',
-    subtitle: 'UBER Pool',
-    amount: 6.00,
-    date: 'Aug 26',
-    icon: 'car-outline'
-  },
-  {
-    id: '3',
-    type: 'income',
-    title: 'Payment',
-    subtitle: 'Payment from Andre',
-    amount: 560.00,
-    date: 'Aug 25',
-    icon: 'cash-outline'
-  },
-  {
-    id: '4',
-    type: 'income',
-    title: 'Monthly Salary',
-    subtitle: 'Salary from January',
-    amount: 560.00,
-    date: 'Aug 25',
-    icon: 'cash-outline'
-  },
-];
+const spendingData = {
+  labels: ['1D', '1W', '1M', '3M', '1Y', 'ALL'],
+  datasets: [{
+    data: [1200, 1100, 1500, 1000, 1800, 1200],
+    color: (opacity = 1) => `rgba(31, 65, 187, ${opacity})`,
+    strokeWidth: 2
+  }]
+};
 
 const DashboardScreen = () => {
   const navigation = useNavigation<DashboardScreenNavigationProp>();
@@ -97,7 +78,8 @@ const DashboardScreen = () => {
           <Text style={styles.actionText}>Goals</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity style={styles.actionButton} 
+          onPress={() => navigation.navigate('Loan')}>
           <View style={styles.actionIcon}>
             <Ionicons name="cash" size={24} color="#1F41BB" />
           </View>
@@ -125,66 +107,32 @@ const DashboardScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Transactions Section */}
-      <View style={styles.transactionsSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllButton}>See all</Text>
-          </TouchableOpacity>
+      {/* Content */}
+      <View style={styles.contentSection}>
+        {/* Spending Analysis */}
+        <View style={styles.spendingCard}>
+          <Text style={styles.spendingTitle}>Spending Analysis</Text>
+          <Text style={styles.totalSpending}>$1,200</Text>
+          <Text style={styles.spendingSubtitle}>Last 30 Days +12%</Text>
+          
+          <View style={styles.chartContainer}>
+            <LineChart
+              data={spendingData}
+              width={screenWidth - 48}
+              height={220}
+              chartConfig={chartConfig}
+              bezier
+              style={{
+                marginVertical: 8,
+                borderRadius: 16,
+              }}
+              withInnerLines={true}
+              withOuterLines={true}
+              withHorizontalLabels={true}
+              withVerticalLabels={true}
+            />
+          </View>
         </View>
-
-        {/* Transaction Filters */}
-        <View style={styles.filters}>
-          <TouchableOpacity style={[styles.filterButton, styles.filterButtonActive]}>
-            <Text style={[styles.filterText, styles.filterTextActive]}>All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton}>
-            <View style={styles.filterContent}>
-              <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
-              <Text style={styles.filterText}>Income</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton}>
-            <View style={styles.filterContent}>
-              <View style={[styles.dot, { backgroundColor: '#F44336' }]} />
-              <Text style={styles.filterText}>Expense</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton}>
-            <View style={styles.filterContent}>
-              <View style={[styles.dot, { backgroundColor: '#2980b9' }]} />
-              <Text style={styles.filterText}>Categories</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Transactions List */}
-        <ScrollView style={styles.transactionsList}>
-          <Text style={styles.dateLabel}>TODAY</Text>
-          {transactions.map(transaction => (
-            <TouchableOpacity key={transaction.id} style={styles.transactionItem}>
-              <View style={styles.transactionLeft}>
-                <View style={styles.transactionIcon}>
-                  <Ionicons name={transaction.icon as any} size={24} color="#1F41BB" />
-                </View>
-                <View>
-                  <Text style={styles.transactionTitle}>{transaction.title}</Text>
-                  <Text style={styles.transactionSubtitle}>{transaction.subtitle}</Text>
-                </View>
-              </View>
-              <View style={styles.transactionRight}>
-                <Text style={[
-                  styles.transactionAmount,
-                  transaction.type === 'expense' ? styles.expenseText : styles.incomeText
-                ]}>
-                  {transaction.type === 'expense' ? '-' : '+'}${transaction.amount.toFixed(2)}
-                </Text>
-                <Text style={styles.transactionDate}>{transaction.date}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
 
       {/* Bottom Navigation */}
@@ -203,7 +151,8 @@ const DashboardScreen = () => {
           <Ionicons name="add" size={32} color="#FFF" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navButton}>
+        <TouchableOpacity style={styles.navButton} 
+          onPress={() => navigation.navigate('Budget')}>
           <Ionicons name="wallet-outline" size={24} color="#666" />
           <Text style={styles.navText}>Budgets</Text>
         </TouchableOpacity>
@@ -282,117 +231,38 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
   },
-  transactionsSection: {
+  contentSection: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    paddingTop: 20,
+    paddingTop: 24,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 15,
+  spendingCard: {
+    marginHorizontal: 24,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 18,
+  spendingTitle: {
+    fontSize: 16,
+    color: '#666666',
+    marginBottom: 8,
+  },
+  totalSpending: {
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#000000',
-  },
-  seeAllButton: {
-    color: '#1F41BB',
-    fontSize: 14,
-  },
-  filters: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 10,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-  },
-  filterButtonActive: {
-    backgroundColor: '#1F41BB',
-  },
-  filterContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  filterText: {
-    color: '#666666',
-    fontSize: 14,
-  },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  transactionsList: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  dateLabel: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 10,
-  },
-  transactionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-  },
-  transactionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  transactionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F4FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  transactionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-  },
-  transactionSubtitle: {
-    fontSize: 14,
-    color: '#666666',
-  },
-  transactionRight: {
-    alignItems: 'flex-end',
-  },
-  transactionAmount: {
-    fontSize: 16,
-    fontWeight: '600',
     marginBottom: 4,
   },
-  expenseText: {
-    color: '#F44336',
-  },
-  incomeText: {
-    color: '#4CAF50',
-  },
-  transactionDate: {
+  spendingSubtitle: {
     fontSize: 14,
-    color: '#666666',
+    color: '#4CAF50',
+    marginBottom: 16,
+  },
+  chartContainer: {
+    alignItems: 'center',
   },
   bottomNav: {
     flexDirection: 'row',

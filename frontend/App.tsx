@@ -10,6 +10,9 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
 import BillScannerScreen from './src/screens/BillScannerScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import BudgetScreen from './src/screens/BudgetScreen';
+import LoanScreen from './src/screens/LoanScreen';
+import CreateExpenseScreen from './src/screens/CreateExpenseScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -30,6 +33,9 @@ export default function App() {
         <Stack.Screen name="Category" component={CategoryScreen} />
         <Stack.Screen name="BillScanner" component={BillScannerScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Budget" component={BudgetScreen} />
+        <Stack.Screen name="Loan" component={LoanScreen} />
+        <Stack.Screen name="CreateExpense" component={CreateExpenseScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

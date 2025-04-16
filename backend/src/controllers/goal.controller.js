@@ -3,26 +3,72 @@ const goalService = require("../services/goal.service");
 
 exports.createGoal = async (req, res) => {
     try {
-        const goal = await goalService.createGoal(req.body);
-        res.status(201).json({ success: true, data: goal });
+        const { 
+            userID,
+            goalName,
+            targetAmount,
+            startDate,
+            targetDate,
+            type,
+            description,
+            milestones 
+        } = req.body;
+        
+        const goal = await goalService.createGoal({
+            userID,
+            goalName,
+            targetAmount,
+            startDate,
+            targetDate,
+            type,
+            description,
+            milestones
+        });
+        
+        res.status(201).json({ success: true, data: {goal} });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
     }
 };
 
-exports.getAllGoals = async (req, res) => {
+exports.getUserGoals = async (req, res) => {
     try {
-        const goals = await goalService.getAllGoals();
-        res.status(200).json({ success: true, data: goals });
+        const { userID } = req.params;
+        const { type, status } = req.query;
+        const goals = await goalService.getUserGoals(userID, { type, status });
+        res.status(200).json({ success: true, data: {goals} });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-exports.completeGoal = async (req, res) => {
+exports.updateGoal = async (req, res) => {
     try {
-        const goal = await goalService.updateGoal(req.params.id, req.body.currentAmount);
-        res.status(200).json({ success: true, data: goal });
+        const { 
+            goalName,
+            targetAmount,
+            currentAmount,
+            startDate,
+            targetDate,
+            type,
+            status,
+            description,
+            milestones 
+        } = req.body;
+        
+        const goal = await goalService.updateGoal(req.params.id, {
+            goalName,
+            targetAmount,
+            currentAmount,
+            startDate,
+            targetDate,
+            type,
+            status,
+            description,
+            milestones
+        });
+        
+        res.status(200).json({ success: true, data: {goal} });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -31,7 +77,7 @@ exports.completeGoal = async (req, res) => {
 exports.deleteGoal = async (req, res) => {
     try {
         await goalService.deleteGoal(req.params.id);
-        res.status(200).json({ success: true, message: "Goal deleted successfully" });
+        res.status(200).json({ success: true, message: "Goal deleted successfully", data: null });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

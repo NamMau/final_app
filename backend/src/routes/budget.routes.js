@@ -11,10 +11,10 @@ const { authMiddleware } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
-router.post("/", authMiddleware, createBudget);
-router.get("/", authMiddleware, getAllBudgets);
-router.get("/:id", authMiddleware, getBudgetById); 
-router.put("/:id", authMiddleware, updateBudgetById);
-router.delete("/:id", authMiddleware, deleteBudgetById);
+router.post("/create-budget", authMiddleware, createBudget);
+router.get("/get-all-budgets", authMiddleware, getAllBudgets);
+router.get("/get-budget-by-id/:id", authMiddleware, getBudgetById); 
+router.put("/update-budget-by-id/:id", authMiddleware, updateBudgetById);
+router.delete("/delete-budget-by-id/:id", authMiddleware, deleteBudgetById);
 
 module.exports = router;
