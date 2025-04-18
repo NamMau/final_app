@@ -16,6 +16,9 @@ const PORT = process.env.PORT || 4000;
 const API_PASSWORD = process.env.API_PASSWORD; // Lấy mật khẩu API từ .env
 connectDB();
 
+
+//app.set('trust proxy', true);
+
 // Configure multer for handling file uploads
 const storage = multer.memoryStorage(); // Store files in memory
 const upload = multer({

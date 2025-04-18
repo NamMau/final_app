@@ -1,7 +1,7 @@
 const Goal = require('../models/Goal.model');
 
 exports.createGoal = async ({
-    userID,
+    userId,
     goalName,
     targetAmount,
     startDate,
@@ -13,7 +13,7 @@ exports.createGoal = async ({
     status = "in_progress"
 }) => {
     return await Goal.create({
-        user: userID,
+        user: userId,
         goalName,
         targetAmount,
         startDate,
@@ -26,8 +26,8 @@ exports.createGoal = async ({
     });
 };
 
-exports.getUserGoals = async (userID, filters = {}) => {
-    const query = { user: userID };
+exports.getUserGoals = async (userId, filters = {}) => {
+    const query = { user: userId };
     
     // Apply filters
     if (filters.type) query.type = filters.type;

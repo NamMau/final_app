@@ -1,7 +1,7 @@
 const Notification = require("../models/Notification.model");
 
 exports.createNotification = async ({
-    userID,
+    userId,
     message,
     type,
     priority = "normal",
@@ -9,7 +9,7 @@ exports.createNotification = async ({
     status = "unread"
 }) => {
     return await Notification.create({
-        user: userID,
+        user: userId,
         message,
         type,
         priority,
@@ -19,8 +19,8 @@ exports.createNotification = async ({
     });
 };
 
-exports.getUserNotifications = async (userID, filters = {}) => {
-    const query = { user: userID };
+exports.getUserNotifications = async (userId, filters = {}) => {
+    const query = { user: userId };
     
     // Apply filters
     if (filters.type) query.type = filters.type;

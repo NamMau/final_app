@@ -4,7 +4,7 @@ const loanService = require("../services/loan.service");
 exports.createLoan = async (req, res) => {
     try {
         const { 
-            userID,
+            userId,
             goalID,
             loanName,
             loanAmount,
@@ -16,7 +16,7 @@ exports.createLoan = async (req, res) => {
         } = req.body;
         
         const loan = await loanService.createLoan({
-            userID,
+            userId,
             goalID,
             loanName,
             loanAmount,
@@ -35,9 +35,9 @@ exports.createLoan = async (req, res) => {
 
 exports.getUserLoans = async (req, res) => {
     try {
-        const { userID } = req.params;
+        const { userId } = req.params;
         const { status } = req.query;
-        const loans = await loanService.getUserLoans(userID, { status });
+        const loans = await loanService.getUserLoans(userId, { status });
         res.status(200).json({ success: true, data: {loans} });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

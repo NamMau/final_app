@@ -5,26 +5,12 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
-import { authService } from '../services/auth.service';
+import { authService, LoginResponse } from '../services/auth.service'; // Import authService và LoginResponse
 import { ENDPOINTS } from '../config/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SuccessModal from '../components/SuccessModal';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
-
-interface LoginResponse {
-  message: string;
-  user: {
-    id: string;
-    userName: string;
-    email: string;
-    fullName: string;
-  };
-  account: {
-    id: string;
-    totalBalance: number;
-  };
-}
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
@@ -45,10 +31,10 @@ const LoginScreen = () => {
       console.log('Attempting login with:', { email });
       const response = await authService.login(email, password);
       console.log('Login successful:', response);
-      
+
       // Show success modal
       setShowSuccessModal(true);
-      
+
       // Navigate after a short delay
       setTimeout(() => {
         setShowSuccessModal(false);
@@ -78,12 +64,12 @@ const LoginScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <SuccessModal 
-        visible={showSuccessModal} 
+      <SuccessModal
+        visible={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}
       />
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
@@ -120,15 +106,15 @@ const LoginScreen = () => {
               style={styles.eyeIcon}
               onPress={() => setShowPassword(!showPassword)}
             >
-              <Ionicons 
-                name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                size={24} 
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={24}
                 color="#666"
               />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
             onPress={handleLogin}
             disabled={isLoading}
@@ -140,7 +126,7 @@ const LoginScreen = () => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.createAccount}
             onPress={() => navigation.navigate('Register')}
             disabled={isLoading}
@@ -156,21 +142,21 @@ const LoginScreen = () => {
           </View>
 
           <View style={styles.socialButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.socialButton}
               disabled={isLoading}
             >
               <Ionicons name="logo-google" size={24} color="#000" />
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.socialButton}
               disabled={isLoading}
             >
               <Ionicons name="logo-facebook" size={24} color="#000" />
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.socialButton}
               disabled={isLoading}
             >
@@ -299,4 +285,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen; 
+export default LoginScreen;

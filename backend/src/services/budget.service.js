@@ -1,8 +1,8 @@
 const Budget = require("../models/Budget.model");
 
-exports.createBudget = async ({ userID, categoryID, name, amount, spent = 0, period, startDate, endDate, alertThreshold, isActive = true }) => {
+exports.createBudget = async ({ userId, categoryID, name, amount, spent = 0, period, startDate, endDate, alertThreshold, isActive = true }) => {
     return await Budget.create({
-        user: userID,
+        user: userId,
         category: categoryID,
         name,
         amount,
@@ -15,8 +15,8 @@ exports.createBudget = async ({ userID, categoryID, name, amount, spent = 0, per
     });
 };
 
-exports.getBudgets = async (userID, filters = {}) => {
-    const query = { user: userID };
+exports.getBudgets = async (userId, filters = {}) => {
+    const query = { user: userId };
     // Apply filters
     if (filters.category) query.category = filters.category;
     if (filters.period) query.period = filters.period;

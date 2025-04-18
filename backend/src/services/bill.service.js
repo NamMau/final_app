@@ -49,9 +49,9 @@ const parseBillText = (text) => {
     return result;
 };
 
-const createBill = async ({ userID, billName, amount, dueDate, categoryID, description, type, location, tags, status = "unpaid" }) => {
+const createBill = async ({ userId, billName, amount, dueDate, categoryID, description, type, location, tags, status = "unpaid" }) => {
     const bill = await Bill.create({
-        user: userID,
+        user: userId,
         billName,
         amount,
         dueDate,
@@ -62,10 +62,11 @@ const createBill = async ({ userID, billName, amount, dueDate, categoryID, descr
         tags,
         status
     });
+    return bill;
 };
 
-const getBills = async (userID, filters = {}) => {
-    const query = { user: userID };
+const getBills = async (userId, filters = {}) => {
+    const query = { user: userId };
     
     // Apply filters
     if (filters.status) query.status = filters.status;
@@ -110,6 +111,93 @@ const deleteBill = async (billID) => {
 const deleteAllBills = async () => {
     await Bill.deleteMany({});
     return null;
+};
+
+// New functions for expense tracking
+const getExpenseSummary = async (userId, startDate, endDate) => {
+    const expenses = await Bill.find({
+        user: userId,
+        dueDate: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate)
+        },
+        status: 'paid'
+    }).populate('category');
+
+    const summary = {
+        total: 0,
+        byCategory: {},
+        byDate: {},
+        byType: {}
+    };
+
+    expenses.forEach(expense => {
+        // Calculate total
+        summary.total += expense.amount;
+
+        // Group by category
+        const categoryName = expense.category?.categoryName || 'Uncategorized';
+        summary.byCategory[categoryName] = (summary.byCategory[categoryName] || 0) + expense.amount;
+
+        // Group by date
+        const date = expense.dueDate.toISOString().split('T')[0];
+        summary.byDate[date] = (summary.byDate[date] || 0) + expense.amount;
+
+        // Group by type
+        const type = expense.type || 'manual';
+        summary.byType[type] = (summary.byType[type] || 0) + expense.amount;
+    });
+
+    return summary;
+};
+
+const getExpenseTrends = async (userId, period = 'month') => {
+    const now = new Date();
+    let startDate;
+
+    switch (period) {
+        case 'week':
+            startDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+        case 'month':
+            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            break;
+        case 'year':
+            startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+            break;
+        default:
+            startDate = new Date(now.setMonth(now.getMonth() - 1));
+    }
+
+    const expenses = await Bill.find({
+        user: userId,
+        dueDate: { $gte: startDate },
+        status: 'paid'
+    }).populate('category');
+
+    const trends = {
+        daily: {},
+        weekly: {},
+        monthly: {}
+    };
+
+    expenses.forEach(expense => {
+        const date = new Date(expense.dueDate);
+        
+        // Daily trend
+        const dayKey = date.toISOString().split('T')[0];
+        trends.daily[dayKey] = (trends.daily[dayKey] || 0) + expense.amount;
+
+        // Weekly trend
+        const weekKey = `Week ${Math.ceil(date.getDate() / 7)}`;
+        trends.weekly[weekKey] = (trends.weekly[weekKey] || 0) + expense.amount;
+
+        // Monthly trend
+        const monthKey = date.toLocaleString('default', { month: 'short' });
+        trends.monthly[monthKey] = (trends.monthly[monthKey] || 0) + expense.amount;
+    });
+
+    return trends;
 };
 
 const scanBill = async (userId, imageBase64) => {
@@ -188,5 +276,7 @@ module.exports = {
     deleteBill,
     deleteAllBills,
     scanBill,
-    updateScannedBill
+    updateScannedBill,
+    getExpenseSummary,
+    getExpenseTrends
 };

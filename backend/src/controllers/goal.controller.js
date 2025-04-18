@@ -4,7 +4,7 @@ const goalService = require("../services/goal.service");
 exports.createGoal = async (req, res) => {
     try {
         const { 
-            userID,
+            userId,
             goalName,
             targetAmount,
             startDate,
@@ -15,7 +15,7 @@ exports.createGoal = async (req, res) => {
         } = req.body;
         
         const goal = await goalService.createGoal({
-            userID,
+            userId,
             goalName,
             targetAmount,
             startDate,
@@ -33,9 +33,9 @@ exports.createGoal = async (req, res) => {
 
 exports.getUserGoals = async (req, res) => {
     try {
-        const { userID } = req.params;
+        const { userId } = req.params;
         const { type, status } = req.query;
-        const goals = await goalService.getUserGoals(userID, { type, status });
+        const goals = await goalService.getUserGoals(userId, { type, status });
         res.status(200).json({ success: true, data: {goals} });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

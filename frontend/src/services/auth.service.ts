@@ -15,7 +15,7 @@ export interface UserData {
 
 export interface AccountData {
   id: string;
-  userID: string;
+  userId: string;
   totalBalance: number;
 }
 
@@ -38,6 +38,8 @@ export interface ApiResponse<T> {
   message?: string;
   data?: T;
 }
+
+
 
 export const authService = {
   // Login function
@@ -89,6 +91,7 @@ export const authService = {
     phoneNumber?: string;
     address?: string;
     dateOfBirth?: string;
+    avatar: string
   }): Promise<RegisterResponse> {
     try {
       const apiResponse = await apiService.post<RegisterResponse>(ENDPOINTS.AUTH.REGISTER, userData);
@@ -100,10 +103,19 @@ export const authService = {
       const registerData = apiResponse.data;
 
       // Save tokens and user data
-      await AsyncStorage.setItem('accessToken', registerData.accessToken); // Assuming registerData.token is the accessToken
-      await AsyncStorage.setItem('refreshToken', registerData.refreshToken);
-      await AsyncStorage.setItem('user', JSON.stringify(registerData.user));
-      await AsyncStorage.setItem('account', JSON.stringify(registerData.account));
+      
+      if (registerData.accessToken) {
+        await AsyncStorage.setItem('accessToken', registerData.accessToken);
+      } // Assuming registerData.token is the accessToken
+      if (registerData.refreshToken) {
+        await AsyncStorage.setItem('refreshToken', registerData.refreshToken);
+      }
+      if (registerData.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(registerData.user));
+      }
+      if (registerData.account) {
+        await AsyncStorage.setItem('account', JSON.stringify(registerData.account));
+      }
 
       return registerData;
     } catch (error: any) {

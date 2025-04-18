@@ -22,7 +22,6 @@ class ApiService {
       'x-api-key': API_KEY
     };
 
-    // Add auth token if available
     const accessToken = await AsyncStorage.getItem('accessToken');
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
@@ -41,228 +40,185 @@ class ApiService {
     
     let data;
     if (contentType?.includes('application/json')) {
-        data = JSON.parse(text);
+      data = JSON.parse(text);
     } else {
-        data = text;
+      data = text;
     }
 
     if (!response.ok) {
-        const errorMessage = data?.message || `Request failed with status ${response.status}`;
-        throw { message: errorMessage, status: response.status };
+      const errorMessage = data?.message || `Request failed with status ${response.status}`;
+      throw { message: errorMessage, status: response.status };
     }
 
-    return data;
+    return {
+      success: true,
+      message: 'Success',
+      data: data as T
+    };
   }
 
   async refreshAccessToken(): Promise<string | null> {
-        const refreshToken = await AsyncStorage.getItem('refreshToken');
-        if (!refreshToken) {
-            console.error('No refresh token available');
-            return null;
-        }
-
-        try {
-            const response = await this.post<{ accessToken: string }>('/auth/refresh-token', { refreshToken });
-            if (response.success && response.data?.accessToken) {
-                await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                return response.data.accessToken;
-            }
-            throw new Error(response.message || 'Failed to refresh access token');
-        } catch (error) {
-            console.error('Refresh token error:', error);
-            return null;
-        }
+    const refreshToken = await AsyncStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      console.error('No refresh token available');
+      return null;
     }
 
-    async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
-      try {
-          let url = `${this.baseURL}${endpoint}`;
-          if (params) {
-              const queryString = new URLSearchParams(params).toString();
-              url += `?${queryString}`;
-          }
-  
-          const headers = await this.getHeaders();
-  
-          const response = await fetch(url, {
-              method: 'GET',
-              headers
-          });
-  
-          return this.handleResponse<T>(response, { url, method: 'GET', headers });
-      } catch (error: unknown) {
-          console.error('GET request error:', error);
-          return { success: false, message: 'Failed to fetch data', data: undefined };
+    try {
+      const response = await this.post<{ accessToken: string }>('/v1/auth/refresh-token', { refreshToken });
+      if (response.success && response.data?.accessToken) {
+        await AsyncStorage.setItem('accessToken', response.data.accessToken);
+        return response.data.accessToken;
       }
+      throw new Error(response.message || 'Failed to refresh access token');
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      return null;
+    }
   }
 
-  async post<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
+  async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
-        const url = `${this.baseURL}${endpoint}`;
-        const headers = await this.getHeaders();
-        const body = JSON.stringify(data);
+      let url = `${this.baseURL}${endpoint}`;
+      if (params) {
+        const queryString = new URLSearchParams(params).toString();
+        url += `?${queryString}`;
+      }
 
-        console.log('\n=== Sending POST Request ===');
-        console.log('URL:', url);
-        console.log('Headers:', headers);
-        console.log('Body:', body);
+      const headers = await this.getHeaders();
+      const response = await fetch(url, {
+        method: 'GET',
+        headers
+      });
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers,
-            body,
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        const contentType = response.headers.get('content-type');
-        const text = await response.text();
-        
-        console.log('\n=== Received Response ===');
-        console.log('Status:', response.status);
-        console.log('Status Text:', response.statusText);
-        console.log('Headers:', response.headers);
-        console.log('Response Body:', text);
-
-        let responseData;
-        if (contentType?.includes('application/json')) {
-            responseData = JSON.parse(text);
-        } else {
-            responseData = text;
-        }
-
-        if (!response.ok) {
-            if (response.status === 401) {
-                const newAccessToken = await this.refreshAccessToken();
-                if (newAccessToken) {
-                    const retryResponse = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            ...headers,
-                            Authorization: `Bearer ${newAccessToken}`
-                        },
-                        body,
-                        signal: controller.signal
-                    });
-
-                    return this.handleResponse<T>(retryResponse, { url, method: 'POST', headers, body });
-                }
-
-                await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user', 'account']);
-            }
-
-            const errorMessage = responseData?.message || `Request failed with status ${response.status}`;
-            console.error('API Error:', {
-                status: response.status,
-                message: errorMessage,
-                url,
-                method: 'POST'
-            });
-            
-            throw { message: errorMessage, status: response.status };
-        }
-
-        return responseData;
+      return this.handleResponse<T>(response, { url, method: 'GET', headers });
     } catch (error: unknown) {
-        console.error('\n=== POST Request Error ===');
-        console.error('Error:', error);
-        
-        if (error instanceof Error) {
-            if (error.name === 'AbortError') {
-                return { 
-                    success: false, 
-                    message: 'Request timed out. Please check your internet connection and try again.',
-                    data: undefined 
-                };
-            }
-            if (error.message === 'Network request failed') {
-                return { 
-                    success: false, 
-                    message: 'Cannot connect to server. Please check your internet connection and ensure the server is running.',
-                    data: undefined 
-                };
-            }
-        }
-        
-        return { 
-            success: false, 
-            message: 'Failed to create data. Please try again later.',
-            data: undefined 
-        };
+      console.error('GET request error:', error);
+      return { success: false, message: 'Failed to fetch data', data: undefined };
     }
-}
+  }
 
-async put<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
-  try {
+  // === CHỖ NÀY LÀ POST ĐÃ SỬA TOÀN BỘ ===
+  async post<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = await this.getHeaders();
+
+    // Thiết lập timeout/abort
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    let rawResponse: Response;
+    try {
+      rawResponse = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    // Đọc và parse JSON thành ApiResponse<T>
+    const text = await rawResponse.text();
+    let parsed: ApiResponse<T>;
+    try {
+      parsed = JSON.parse(text) as ApiResponse<T>;
+    } catch {
+      throw { message: 'Invalid JSON from server', status: rawResponse.status };
+    }
+
+    // Nếu HTTP error, ném với message từ server
+    if (!rawResponse.ok) {
+      const errMsg = parsed.message || `Request failed with status ${rawResponse.status}`;
+      throw { message: errMsg, status: rawResponse.status };
+    }
+
+    // Trả về đúng wrapper từ server
+    return {
+      success: parsed.success,
+      message: parsed.message,
+      data: parsed.data
+    };
+  }
+  // === HẾT POST SỬA ===
+
+  async put<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
+    try {
       const url = `${this.baseURL}${endpoint}`;
       const headers = await this.getHeaders();
       const body = JSON.stringify(data);
 
       const response = await fetch(url, {
-          method: 'PUT',
-          headers,
-          body
+        method: 'PUT',
+        headers,
+        body
       });
 
       return this.handleResponse<T>(response, { url, method: 'PUT', headers, body });
-  } catch (error: unknown) {
+    } catch (error: unknown) {
       console.error('PUT request error:', error);
       return { success: false, message: 'Failed to update data', data: undefined };
+    }
   }
-}
 
-async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-  try {
+  async patch<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
+    try {
+      const url = `${this.baseURL}${endpoint}`;
+      const headers = await this.getHeaders();
+      const body = JSON.stringify(data);
+
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers,
+        body
+      });
+
+      return this.handleResponse<T>(response, { url, method: 'PATCH', headers, body });
+    } catch (error: unknown) {
+      console.error('PATCH request error:', error);
+      return { success: false, message: 'Failed to update data', data: undefined };
+    }
+  }
+
+  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    try {
       const url = `${this.baseURL}${endpoint}`;
       const headers = await this.getHeaders();
 
       const response = await fetch(url, {
-          method: 'DELETE',
-          headers
+        method: 'DELETE',
+        headers
       });
 
       return this.handleResponse<T>(response, { url, method: 'DELETE', headers });
-  } catch (error: unknown) {
+    } catch (error: unknown) {
       console.error('DELETE request error:', error);
       return { success: false, message: 'Failed to delete data', data: undefined };
+    }
   }
-}
 
-async uploadFile<T>(endpoint: string, file: File): Promise<ApiResponse<T>> {
-  try {
+  async uploadFile<T>(endpoint: string, file: File): Promise<ApiResponse<T>> {
+    try {
       const formData = new FormData();
       formData.append('image', file);
 
       const headers = await this.getHeaders();
-      delete headers['Content-Type']; // Let the browser set the correct content type for FormData
+      delete headers['Content-Type']; // để browser tự set multipart/form-data
 
       const url = `${this.baseURL}${endpoint}`;
-
       const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: formData
+        method: 'POST',
+        headers,
+        body: formData
       });
 
-      return this.handleResponse<T>(response, {
-          url,
-          method: 'POST',
-          headers,
-          body: undefined // FormData cannot be serialized as a string; it's passed directly
-      });
-  } catch (error: unknown) {
+      return this.handleResponse<T>(response, { url, method: 'POST', headers });
+    } catch (error: unknown) {
       console.error('File upload error:', error);
-      return {
-          success: false,
-          message: 'Failed to upload file',
-          data: undefined
-      };
+      return { success: false, message: 'Failed to upload file', data: undefined };
+    }
   }
-}
 }
 
 export const apiService = new ApiService();

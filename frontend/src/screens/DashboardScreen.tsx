@@ -49,7 +49,7 @@ const DashboardScreen = () => {
       <View style={styles.header}>
         <View>
           <Text style={styles.balanceLabel}>Available Balance</Text>
-          <Text style={styles.balanceAmount}>2,589.50 vnd</Text>
+          <Text style={styles.balanceAmount}>2.589.500 $</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.notificationButton}>

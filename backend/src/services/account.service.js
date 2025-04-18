@@ -19,9 +19,9 @@ const Account = require("../models/Account.model");
 //         isActive
 //     });
 // };
-exports.createAccount = async ({ userID, accountName, accountType, balance = 0, currency = "VND", description, isActive = true }) => {
+exports.createAccount = async ({ userId, accountName, accountType, balance = 0, currency = "$", description, isActive = true }) => {
     return await Account.create({
-        user: userID,
+        user: userId,
         accountName,
         accountType,
         balance,
@@ -43,8 +43,8 @@ exports.createAccount = async ({ userID, accountName, accountType, balance = 0, 
 
 //     return await Account.find(query).sort({ accountName: 1 });
 // };
-exports.getAccounts = async (userID, filters = {}) => {
-    const query = { user: userID };
+exports.getAccounts = async (userId, filters = {}) => {
+    const query = { user: userId };
 
     // Apply filters
     if (filters.accountType) query.accountType = filters.accountType;

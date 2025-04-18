@@ -1,6 +1,6 @@
 // export const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.7:4000/api';
 // export const API_KEY = process.env.REACT_APP_API_KEY || 'super_secret_password';
-export const API_URL = 'http://192.168.1.9:4000/api';
+export const API_URL = 'http:/192.168.1.16:4000/api';
 export const API_KEY = 'super_secret_password';
 
 export const ENDPOINTS = {
@@ -16,16 +16,21 @@ export const ENDPOINTS = {
     UPDATE: (id: string) => `/v1/users/update-user-by-id/${id}`,
     CHANGE_PASSWORD: '/v1/users/change-password',
     DELETE: (id: string) => `/v1/users/delete-user-by-id/${id}`,
+    GET_PROFILE: '/v1/users/profile',
+    UPDATE_PROFILE: '/v1/users/update-profile'
   },
   BILLS: {
+    BASE: '/v1/bills',
     CREATE: '/v1/bills/create-bill',
-    GET_ALL: '/v1/bills/get-all-bills',
-    GET_BY_ID: (id: string) => `/v1/bills/get-bill-by-id/${id}`,
-    UPDATE: (id: string) => `/v1/bills/update-bill-by-id/${id}`,
+    GET_ALL: '/v1/bills/getallbills',
+    GET_BY_ID: (id: string) => `/v1/bills/get-bill/${id}`,
+    UPDATE: (id: string) => `/v1/bills/update-bill/${id}`,
     DELETE: (id: string) => `/v1/bills/delete-bill/${id}`,
     DELETE_ALL: '/v1/bills/delete-bills',
     SCAN: '/v1/bills/scan',
     UPDATE_SCANNED: (id: string) => `/v1/bills/scan/${id}`,
+    SUMMARY: '/v1/bills/summary',
+    TRENDS: '/v1/bills/trends',
   },
   CATEGORIES: {
     CREATE: '/v1/categories/create-category',

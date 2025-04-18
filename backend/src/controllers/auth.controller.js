@@ -5,11 +5,11 @@ const logger = require("winston"); // Optional: keep it if you actively log erro
 // Register a new user
 exports.register = async (req, res) => {
     try {
-        const { user, account, token } = await authService.register(req.body);
+        const { accessToken, refreshToken, user, account } = await authService.register(req.body);
         res.status(201).json({
             success: true,
             message: "User created successfully",
-            data: { user, account, token }
+            data: { accessToken, refreshToken, user, account }
         });
     } catch (error) {
         logger.error("Register error: ", error.message); // Optional: remove if logging isn't consistent

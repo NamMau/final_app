@@ -1,7 +1,7 @@
 const Loan = require("../models/Loan.model");
 
 exports.createLoan = async ({
-    userID,
+    userId,
     goalID,
     loanName,
     loanAmount,
@@ -14,7 +14,7 @@ exports.createLoan = async ({
     status = "active"
 }) => {
     return await Loan.create({
-        user: userID,
+        user: userId,
         goal: goalID,
         loanName,
         loanAmount,
@@ -28,8 +28,8 @@ exports.createLoan = async ({
     });
 };
 
-exports.getUserLoans = async (userID, filters = {}) => {
-    const query = { user: userID };
+exports.getUserLoans = async (userId, filters = {}) => {
+    const query = { user: userId };
     
     // Apply filters
     if (filters.status) query.status = filters.status;

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const BillSchema = new mongoose.Schema({
-    userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     categoryID: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     billName: { type: String, required: true },
     amount: { type: Number, required: true },

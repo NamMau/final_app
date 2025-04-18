@@ -20,6 +20,30 @@ exports.getUserById = async (req, res) => {
     }
 };
 
+exports.getProfile = async (req,res) =>{
+    try{
+        const userId = req.user.id;
+        //const userID = req.params.id;
+        const user = await userService.getUserById(userId);
+        if(!user){
+            return res.status(404).json({success: false, message:"User not found", data: null});
+        }
+        res.status(200).json({success: true, data: {user}});
+    }catch(error){
+        res.status(500).json({success: false, message: error.message});
+    }
+}
+
+exports.updateProfile = async (req, res) =>{
+    try {
+        const userId = req.user.id;
+        const updatedUser = await userService.updateUser(userId, req.body);
+        res.status(200).json({ success: true, data: {updatedUser}});
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message});
+    }
+}
+
 exports.updateUserById = async (req, res) => {
     try {
         const updatedUser = await userService.updateUser(req.params.id, req.body);
@@ -70,9 +94,9 @@ exports.updateStatus = async (req, res) => {
 exports.changePassword = async (req, res) => {
     try {
         const {oldPassword, newPassword} = req.body;
-        const userID = req.params.id;
+        const userId = req.params.id;
 
-        const result = await userService.changePassword(userID, oldPassword, newPassword);
+        const result = await userService.changePassword(userId, oldPassword, newPassword);
         res.status(200).json({success: true,data: {result}});
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });

@@ -1,62 +1,53 @@
 // controllers/bill.controller.js
 const { billService } = require('../services/bill.service');
+const { handleError } = require('../utils/errorHandler');
 
 const createBill = async (req, res) => {
     try {
-        const { 
-            billName, 
-            amount, 
-            categoryID,
-            description,
-            dueDate,
-            type,
-            location,
-            tags 
-        } = req.body;
+        const { billName, amount, dueDate, categoryID, description, type, location, tags } = req.body;
         const userId = req.user.id;
 
         const bill = await billService.createBill({
             userId,
             billName,
             amount,
+            dueDate,
             categoryID,
             description,
-            dueDate,
             type,
             location,
             tags
         });
 
-        return res.status(201).json({
+        res.status(201).json({
             success: true,
-            data: { bill }
+            data: bill,
+            message: 'Bill created successfully'
         });
     } catch (error) {
-        console.error('Error in createBill controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to create bill',
-            error: error.message
-        });
+        handleError(res, error);
     }
 };
 
 const getBills = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { type, status, categoryID } = req.query;
-        const bills = await billService.getBills(userId, { type, status, categoryID });
-        return res.status(200).json({
+        const { status, type, category, startDate, endDate } = req.query;
+
+        const bills = await billService.getBills(userId, {
+            status,
+            type,
+            category,
+            startDate,
+            endDate
+        });
+
+        res.status(200).json({
             success: true,
-            data: { bills }
+            data: bills
         });
     } catch (error) {
-        console.error('Error in getBills controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to get bills',
-            error: error.message
-        });
+        handleError(res, error);
     }
 };
 
@@ -64,7 +55,7 @@ const getBillById = async (req, res) => {
     try {
         const { id } = req.params;
         const bill = await billService.getBillById(id);
-        
+
         if (!bill) {
             return res.status(404).json({
                 success: false,
@@ -72,46 +63,22 @@ const getBillById = async (req, res) => {
             });
         }
 
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
-            data: { bill }
+            data: bill
         });
     } catch (error) {
-        console.error('Error in getBillById controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to get bill',
-            error: error.message
-        });
+        handleError(res, error);
     }
 };
 
-const updateBillById = async (req, res) => {
+const updateBill = async (req, res) => {
     try {
         const { id } = req.params;
-        const { 
-            billName,
-            amount,
-            categoryID,
-            description,
-            dueDate,
-            status,
-            location,
-            tags 
-        } = req.body;
-        const userId = req.user.id;
+        const updateData = req.body;
 
-        const bill = await billService.updateBill(id, {
-            billName,
-            amount,
-            categoryID,
-            description,
-            dueDate,
-            status,
-            location,
-            tags
-        });
-        
+        const bill = await billService.updateBill(id, updateData);
+
         if (!bill) {
             return res.status(404).json({
                 success: false,
@@ -119,27 +86,23 @@ const updateBillById = async (req, res) => {
             });
         }
 
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
-            data: { bill }
+            data: bill,
+            message: 'Bill updated successfully'
         });
     } catch (error) {
-        console.error('Error in updateBillById controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to update bill',
-            error: error.message
-        });
+        handleError(res, error);
     }
 };
 
-const deleteBillById = async (req, res) => {
+const updateBillStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+        const { status } = req.body;
 
-        const bill = await billService.deleteBill(id);
-        
+        const bill = await billService.updateBillStatus(id, status);
+
         if (!bill) {
             return res.status(404).json({
                 success: false,
@@ -147,82 +110,95 @@ const deleteBillById = async (req, res) => {
             });
         }
 
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
-            message: 'Bill deleted successfully',
-            data: null
+            data: bill,
+            message: 'Bill status updated successfully'
         });
     } catch (error) {
-        console.error('Error in deleteBillById controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to delete bill',
-            error: error.message
-        });
+        handleError(res, error);
     }
 };
 
-const deleteBills = async (req, res) => {
+const deleteBill = async (req, res) => {
     try {
-        const userId = req.user.id;
-        await billService.deleteAllBills();
-        return res.status(200).json({
+        const { id } = req.params;
+        await billService.deleteBill(id);
+
+        res.status(200).json({
             success: true,
-            message: 'All bills deleted successfully',
-            data: null
+            message: 'Bill deleted successfully'
         });
     } catch (error) {
-        console.error('Error in deleteBills controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to delete all bills',
-            error: error.message
+        handleError(res, error);
+    }
+};
+
+// New endpoints for expense tracking
+const getExpenseSummary = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { startDate, endDate } = req.query;
+
+        const summary = await billService.getExpenseSummary(userId, startDate, endDate);
+
+        res.status(200).json({
+            success: true,
+            data: summary
         });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
+const getExpenseTrends = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { period } = req.query;
+
+        const trends = await billService.getExpenseTrends(userId, period);
+
+        res.status(200).json({
+            success: true,
+            data: trends
+        });
+    } catch (error) {
+        handleError(res, error);
     }
 };
 
 const scanBill = async (req, res) => {
     try {
-        const { image } = req.body;
         const userId = req.user.id;
+        const { imageBase64 } = req.body;
 
-        if (!image) {
-            return res.status(400).json({
-                success: false,
-                message: 'Image is required'
-            });
-        }
+        const bill = await billService.scanBill(userId, imageBase64);
 
-        const result = await billService.scanBill(userId, image);
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
-            data: {result}
+            data: bill,
+            message: 'Bill scanned successfully'
         });
     } catch (error) {
-        console.error('Error in scanBill controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to scan bill',
-            error: error.message
-        });
+        handleError(res, error);
     }
 };
 
 const updateScannedBill = async (req, res) => {
     try {
-        const { billId } = req.params;
-        const { items } = req.body;
         const userId = req.user.id;
+        const { id } = req.params;
+        const updates = req.body;
 
-        const result = await billService.updateScannedBill(userId, billId, { items });
-        return res.status(200).json({success: true, data: {result}});
-    } catch (error) {
-        console.error('Error in updateScannedBill controller:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to update bill',
-            error: error.message
+        const bill = await billService.updateScannedBill(userId, id, updates);
+
+        res.status(200).json({
+            success: true,
+            data: bill,
+            message: 'Scanned bill updated successfully'
         });
+    } catch (error) {
+        handleError(res, error);
     }
 };
 
@@ -230,9 +206,11 @@ module.exports = {
     createBill,
     getBills,
     getBillById,
-    updateBillById,
-    deleteBillById,
-    deleteBills,
+    updateBill,
+    updateBillStatus,
+    deleteBill,
+    getExpenseSummary,
+    getExpenseTrends,
     scanBill,
     updateScannedBill
 };

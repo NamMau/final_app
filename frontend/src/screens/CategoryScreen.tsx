@@ -1,50 +1,156 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { categoriesService, Category, CreateCategoryDto } from '../services/categories.service';
+import { Notification } from '../components/Notification';
 
 type CategoryScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Category'>;
 
 const CategoryScreen = () => {
   const navigation = useNavigation<CategoryScreenNavigationProp>();
-  const [categoryName, setCategoryName] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [newCategory, setNewCategory] = useState<CreateCategoryDto>({
+    categoryName: '',
+    type: 'expense',
+    icon: 'receipt',
+    color: '#1F41BB'
+  });
 
-  const handleSubmit = () => {
-    // TODO: Implement category creation logic
-    console.log('Creating category:', categoryName);
-    setCategoryName('');
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      setIsLoading(true);
+      const data = await categoriesService.getCategories();
+      setCategories(data);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load categories');
+      console.error('Error loading categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategory.categoryName.trim()) {
+      Alert.alert('Error', 'Category name is required');
+      return;
+    }
+
+    try {
+      await categoriesService.createCategory(newCategory);
+      setShowAddForm(false);
+      setNewCategory({
+        categoryName: '',
+        type: 'expense',
+        icon: 'receipt',
+        color: '#1F41BB'
+      });
+      loadCategories();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create category');
+      console.error('Error creating category:', error);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    Alert.alert(
+      'Delete Category',
+      'Are you sure you want to delete this category?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await categoriesService.deleteCategory(id);
+              setNotificationMessage('Category deleted successfully');
+              setShowNotification(true);
+              loadCategories();
+              setTimeout(() => setShowNotification(false), 3000);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete category');
+              console.error('Error deleting category:', error);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F41BB" />
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Categories</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => setShowAddForm(!showAddForm)}
+        >
+          <Ionicons name={showAddForm ? "close" : "add"} size={24} color="#FFF" />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.formContainer}>
-          <Text style={styles.label}>Category Name</Text>
-          <TextInput
-            style={styles.input}
-            value={categoryName}
-            onChangeText={setCategoryName}
-            placeholder="Enter category name"
-            placeholderTextColor="#666"
-          />
-          <TouchableOpacity 
-            style={[styles.submitButton, !categoryName ? styles.submitButtonDisabled : null]}
-            onPress={handleSubmit}
-            disabled={!categoryName}
-          >
-            <Text style={styles.submitButtonText}>Add Category</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Content */}
+      <View style={styles.contentSection}>
+        {showAddForm && (
+          <View style={styles.formContainer}>
+            <Text style={styles.formTitle}>Add New Category</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Category Name"
+              value={newCategory.categoryName}
+              onChangeText={(text) => setNewCategory({ ...newCategory, categoryName: text })}
+            />
+            <TouchableOpacity 
+              style={styles.submitButton}
+              onPress={handleAddCategory}
+            >
+              <Text style={styles.submitButtonText}>Add Category</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ScrollView style={styles.categoriesList}>
+          {categories.map((category) => (
+            <View key={category._id} style={styles.categoryItem}>
+              <View style={[styles.categoryIcon, { backgroundColor: category.color }]}>
+                <Ionicons name={category.icon as any} size={24} color="#FFF" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryName}>{category.categoryName}</Text>
+                <Text style={styles.categoryType}>{category.type}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.deleteButton}
+                onPress={() => handleDeleteCategory(category._id)}
+              >
+                <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
       </View>
+
+      {showNotification && (
+        <Notification
+          message={notificationMessage}
+          type="success"
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -52,38 +158,54 @@ const CategoryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1F41BB',
   },
   header: {
+    padding: 20,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F4FF',
   },
   backButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F41BB',
-    marginLeft: 16,
+    color: '#FFF',
   },
-  content: {
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contentSection: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 24,
   },
   formContainer: {
-    backgroundColor: '#F1F4FF',
-    padding: 16,
-    borderRadius: 12,
+    marginHorizontal: 24,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#1F41BB',
-    marginBottom: 8,
+    marginBottom: 16,
   },
   input: {
     backgroundColor: '#FFFFFF',
@@ -100,13 +222,46 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
-  submitButtonDisabled: {
-    backgroundColor: '#B0B0B0',
-  },
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  categoriesList: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  categoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F41BB',
+  },
+  categoryType: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 4,
+  },
+  deleteButton: {
+    padding: 8,
   },
 });
 

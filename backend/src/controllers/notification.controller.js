@@ -4,7 +4,7 @@ const notificationService = require("../services/notification.service");
 exports.createNotification = async (req, res) => {
     try {
         const { 
-            userID,
+            userId,
             message,
             type,
             priority,
@@ -12,7 +12,7 @@ exports.createNotification = async (req, res) => {
         } = req.body;
         
         const notification = await notificationService.createNotification({
-            userID,
+            userId,
             message,
             type,
             priority,
@@ -27,9 +27,9 @@ exports.createNotification = async (req, res) => {
 
 exports.getUserNotifications = async (req, res) => {
     try {
-        const { userID } = req.params;
+        const { userId } = req.params;
         const { type, status, priority } = req.query;
-        const notifications = await notificationService.getUserNotifications(userID, { type, status, priority });
+        const notifications = await notificationService.getUserNotifications(userId, { type, status, priority });
         res.status(200).json({ success: true, data: {notifications} });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

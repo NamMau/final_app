@@ -5,7 +5,9 @@ const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = requir
 
 // Register a new user
 exports.register = async (userData) => {
-    const { userName, email, password, phoneNumber, address, dateOfBirth, fullName } = userData;
+    const { userName, email, password, phoneNumber, address, dateOfBirth, fullName, avatar } = userData;
+
+    const normalizeEmail = email.toLowerCase();
 
     const existingUser = await User.findOne({ email });
     if (existingUser) throw new Error("User already exists");
@@ -19,43 +21,57 @@ exports.register = async (userData) => {
 
     const newUser = await User.create({
         userName,
-        email,
+        email: normalizeEmail,
         password: hashedPassword,
         phoneNumber,
         address,
         fullName,
-        dateOfBirth
+        dateOfBirth,
+        avatar
     });
 
     const newAccount = await Account.create({
-        userID: newUser._id,
+        userId: newUser._id,
         totalBalance: 0
     });
 
-    const token = generateAccessToken(newUser._id);
+    const accessToken = generateAccessToken(newUser._id);
+    const refreshToken = generateRefreshToken(newUser._id);
 
     await User.findByIdAndUpdate(newUser._id, {
         $push: {
             tokens: {
-                token,
+                accessToken,
+                refreshToken,
                 createdAt: new Date(),
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
             }
         }
     });
 
-    return { token, user: newUser, account: newAccount };
+    return {
+        accessToken,
+        refreshToken,
+        user: {
+            id: newUser._id,
+            email: newUser.email,
+            userName: newUser.userName,
+            fullName: newUser.fullName,
+            avatar: newUser.avatar
+        },
+        account: newAccount
+    };
 };
 
 // User login
 exports.login = async ({ email, password }) => {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) throw new Error("Invalid credentials");
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new Error("Invalid credentials");
 
-    const account = await Account.findOne({ userID: user._id });
+    const account = await Account.findOne({ userId: user._id });
     if (!account) throw new Error("Account not found");
 
     const accessToken = generateAccessToken(user._id);

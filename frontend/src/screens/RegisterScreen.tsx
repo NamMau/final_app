@@ -10,23 +10,12 @@ import { apiService } from '../services/api';
 import { ENDPOINTS } from '../config/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SuccessRegister from '../components/SuccessRegister';
+import * as ImagePicker from 'expo-image-picker';
+import {Image} from 'react-native';
+import { RegisterResponse } from '../services/auth.service';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
-interface RegisterResponse {
-  message: string;
-  token: string;
-  user: {
-    id: string;
-    userName: string;
-    email: string;
-    fullName: string;
-  };
-  account: {
-    id: string;
-    totalBalance: number;
-  };
-}
 
 const validateEmail = (email: string) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46,6 +35,7 @@ const RegisterScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showSuccessRegister, setShowSuccessRegister] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -62,6 +52,27 @@ const RegisterScreen = () => {
     });
   };
 
+  const pickImage = async () =>{
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Please allow access to your photo library.');
+      return;
+    }
+  
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true, // Nếu muốn gửi dạng base64
+    });
+  
+    if (!result.canceled && result.assets.length > 0) {
+      const picked = result.assets[0];
+      setAvatar(picked.uri);
+    }
+  }
+
   const handleRegister = async () => {
     if (!userName || !fullName || !email || !password || !phoneNumber || !address) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -77,6 +88,7 @@ const RegisterScreen = () => {
       Alert.alert('Error', 'Password must be at least 8 characters long');
       return;
     }
+    
 
     try {
       setIsLoading(true);
@@ -87,15 +99,18 @@ const RegisterScreen = () => {
         password,
         dateOfBirth: dateOfBirth.toISOString(),
         phoneNumber,
-        address
+        address,
+        avatar
       });
 
-      if (response.data) {
-        // Save token and user data to AsyncStorage
-        await AsyncStorage.setItem('token', response.data.token);
-        await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
-        await AsyncStorage.setItem('account', JSON.stringify(response.data.account));
-
+      if (response.success && response.data) {
+        // Lưu token và dữ liệu người dùng vào AsyncStorage
+                // Lưu token và dữ liệu người dùng vào AsyncStorage
+        await AsyncStorage.setItem('accessToken', response.data.accessToken); // Access through data
+        await AsyncStorage.setItem('refreshToken', response.data.refreshToken); // Access through data
+        await AsyncStorage.setItem('user', JSON.stringify(response.data.user)); // Access through data
+        await AsyncStorage.setItem('account', JSON.stringify(response.data.account)); // Access through data
+      
         setShowSuccessRegister(true);
         setTimeout(() => {
           setShowSuccessRegister(false);
@@ -122,6 +137,19 @@ const RegisterScreen = () => {
       <View style={styles.content}>
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Create an account so you can manage your finance</Text>
+
+        <TouchableOpacity 
+          style={styles.avatarPicker}
+          onPress={pickImage}
+          disabled={isLoading}
+        >
+          {avatar ? (
+            <Image source={{ uri: avatar }} style={styles.avatarPreview} />
+          ) : (
+            <Text style={styles.avatarText}>Pick Profile Picture</Text>
+          )}
+        </TouchableOpacity>
+
 
         <View style={styles.form}>
           <TextInput
@@ -324,6 +352,30 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 14,
   },
+  avatarPicker: {
+    height: 120,
+    width: 120,
+    borderRadius: 60,
+    backgroundColor: '#F1F4FF',
+    alignSelf: 'center',
+    marginBottom: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarText: {
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 10,
+  },
+  avatarPreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    resizeMode: 'cover',
+  },
+  
 });
 
 export default RegisterScreen; 

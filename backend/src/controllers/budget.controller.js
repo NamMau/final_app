@@ -4,7 +4,7 @@ const budgetService = require("../services/budget.service");
 exports.createBudget = async (req, res) => {
     try {
         const { 
-            userID, 
+            userId, 
             categoryID, 
             name,
             amount, 
@@ -15,7 +15,7 @@ exports.createBudget = async (req, res) => {
         } = req.body;
         
         const budget = await budgetService.createBudget({
-            userID,
+            userId,
             categoryID,
             name,
             amount,
@@ -86,9 +86,9 @@ exports.deleteBudgetById = async (req, res) => {
 
 exports.getUserBudgets = async (req, res) => {
     try {
-        const { userID } = req.params;
+        const { userId } = req.params;
         const { period, isActive } = req.query;
-        const budgets = await budgetService.getUserBudgets(userID, { period, isActive });
+        const budgets = await budgetService.getUserBudgets(userId, { period, isActive });
         res.status(200).json({ success: true, data: {budgets} });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
