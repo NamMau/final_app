@@ -19,15 +19,11 @@ const Account = require("../models/Account.model");
 //         isActive
 //     });
 // };
-exports.createAccount = async ({ userId, accountName, accountType, balance = 0, currency = "$", description, isActive = true }) => {
+exports.createDefaultAccount = async (userId) => {
     return await Account.create({
-        user: userId,
-        accountName,
-        accountType,
-        balance,
-        currency,
-        description,
-        isActive
+        userId,
+        totalBalance: 0,
+        isActive: true
     });
 };
 
@@ -44,16 +40,13 @@ exports.createAccount = async ({ userId, accountName, accountType, balance = 0, 
 //     return await Account.find(query).sort({ accountName: 1 });
 // };
 exports.getAccounts = async (userId, filters = {}) => {
-    const query = { user: userId };
+    const query = { userId };
 
-    // Apply filters
-    if (filters.accountType) query.accountType = filters.accountType;
-    if (filters.isActive !== undefined) query.isActive = filters.isActive;
-    if (filters.accountName) {
-        query.accountName = { $regex: filters.accountName, $options: 'i' };
+    if (filters.isActive !== undefined) {
+        query.isActive = filters.isActive;
     }
 
-    return await Account.find(query).sort({ accountName: 1 });
+    return await Account.find(query).sort({ createdAt: -1 });
 };
 
 // exports.getAccountById = async (accountID) => {
@@ -81,18 +74,20 @@ exports.getAccountById = async (accountID) => {
 
 //     return await Account.findByIdAndUpdate(accountID, updateData, { new: true });
 // };
-exports.updateAccount = async (accountID, { accountName, accountType, balance, currency, description, isActive }) => {
+exports.updateAccount = async (accountId, { totalBalance, isActive }) => {
     const updateData = {};
-    if (accountName) updateData.accountName = accountName;
-    if (accountType) updateData.accountType = accountType;
-    if (balance !== undefined) updateData.balance = balance;
-    if (currency) updateData.currency = currency;
-    if (description) updateData.description = description;
+    if (totalBalance !== undefined) updateData.totalBalance = totalBalance;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    return await Account.findByIdAndUpdate(accountID, updateData, { new: true });
+    return await Account.findByIdAndUpdate(accountId, updateData, { new: true });
 };
 
-exports.deleteAccount = async (accountID) => {
-    return await Account.findByIdAndDelete(accountID) || null;
+exports.deleteAccount = async (accountId) => {
+    return await Account.findByIdAndDelete(accountId);
+};
+
+exports.addAccountHistory = async (payload) => {
+    const history = new AccountHistory(payload);
+    await history.save();
+    return history;
 };

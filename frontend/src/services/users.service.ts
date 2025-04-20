@@ -7,12 +7,12 @@ export interface User {
   userName: string;
   email: string;
   fullName: string;
-  dateOfBirth?: string;
-  phoneNumber?: string;
-  address?: string;
-  avatar?: string;
+  dateOfBirth: string;
+  phoneNumber: string;
+  address: string;
+  avatar: string;
   status: 'active' | 'inactive' | 'banned';
-  lastLogin?: string;
+  lastLogin: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,7 +21,7 @@ export interface UpdateProfileDto {
   fullName?: string;
   dateOfBirth?: string;
   phoneNumber?: string;
-  address?: string;
+  address: string;
   avatar?: string;
   status?: 'active' | 'inactive' | 'banned';
 }

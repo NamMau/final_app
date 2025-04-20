@@ -19,6 +19,14 @@ export const ENDPOINTS = {
     GET_PROFILE: '/v1/users/profile',
     UPDATE_PROFILE: '/v1/users/update-profile'
   },
+  ACCOUNTS: {
+    CREATE_ACCOUNT: '/v1/accounts/create-account',
+    GET_ALL_ACCOUNTS: '/v1/accounts/get-all-accounts',
+    GET_BY_ID: (id: string) => `/v1/accounts/get-account-by-id/${id}`,
+    UPDATE: (id: string) => `/v1/accounts/update-account/${id}`,
+    DELETE: (id: string) => `/v1/accounts/delete-account/${id}`, 
+    ADD_HISTORY: '/v1/accounts/add-history',
+  },
   BILLS: {
     BASE: '/v1/bills',
     CREATE: '/v1/bills/create-bill',
@@ -55,6 +63,7 @@ export const ENDPOINTS = {
     CREATE: '/v1/loans/create-loan',
     GET_ALL: '/v1/loans/get-user-loans/${userID}',
     GET_BY_ID: (id: string) => `/v1/loans/get-loan-by-id/${id}`,
+    UPDATE: (id: string) => `/v1/loans/update-loan/${id}`,
     DELETE: (id: string) => `/v1/loans/delete-loan/${id}`,
   },
   NOTIFICATIONS: {

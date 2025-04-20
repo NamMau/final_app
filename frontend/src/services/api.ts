@@ -77,28 +77,51 @@ class ApiService {
     }
   }
 
-  async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+  // async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+  //   try {
+  //     let url = `${this.baseURL}${endpoint}`;
+  //     if (params) {
+  //       const queryString = new URLSearchParams(params).toString();
+  //       url += `?${queryString}`;
+  //     }
+
+  //     const headers = await this.getHeaders();
+  //     const response = await fetch(url, {
+  //       method: 'GET',
+  //       headers
+  //     });
+
+  //     return this.handleResponse<T>(response, { url, method: 'GET', headers });
+  //   } catch (error: unknown) {
+  //     console.error('GET request error:', error);
+  //     return { success: false, message: 'Failed to fetch data', data: undefined };
+  //   }
+  // }
+  async get<T>(endpoint: string, params?: Record<string, string | number | boolean>): Promise<ApiResponse<T>> {
     try {
       let url = `${this.baseURL}${endpoint}`;
       if (params) {
-        const queryString = new URLSearchParams(params).toString();
+        const stringParams: Record<string, string> = Object.fromEntries(
+          Object.entries(params).map(([key, value]) => [key, String(value)])
+        );
+        const queryString = new URLSearchParams(stringParams).toString();
         url += `?${queryString}`;
       }
-
+  
       const headers = await this.getHeaders();
       const response = await fetch(url, {
         method: 'GET',
         headers
       });
-
+  
       return this.handleResponse<T>(response, { url, method: 'GET', headers });
     } catch (error: unknown) {
       console.error('GET request error:', error);
       return { success: false, message: 'Failed to fetch data', data: undefined };
     }
   }
+  
 
-  // === CHỖ NÀY LÀ POST ĐÃ SỬA TOÀN BỘ ===
   async post<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`;
     const headers = await this.getHeaders();
