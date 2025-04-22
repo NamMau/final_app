@@ -47,17 +47,20 @@ exports.createCategory = async (req, res) => {
 
 exports.getCategories = async (req, res) => {
     try {
+        console.log('Auth user:', req.user);
         const userId = req.user.id; // Get userID from authenticated user
+        console.log('Getting categories for userId:', userId);
         const { type, isActive } = req.query;
 
         const categories = await categoryService.getCategories(userId, { 
             type, 
             isActive 
         });
+        console.log('Found categories:', categories);
 
         res.status(200).json({ 
             success: true, 
-            data: { categories } 
+            data: categories // Fixed: return categories directly
         });
     } catch (error) {
         res.status(500).json({ 

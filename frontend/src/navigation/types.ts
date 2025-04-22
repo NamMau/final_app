@@ -1,3 +1,5 @@
+import { Budget } from '../services/budgets.service';
+
 export type RootStackParamList = {
   Welcome: undefined;
   Login: undefined;
@@ -7,6 +9,8 @@ export type RootStackParamList = {
   BillScanner: undefined;
   Profile: undefined;
   Budget: undefined;
+  CreateBudget: undefined;
+  UpdateBudget: { budget: Budget };
   Loan: undefined;
   CreateExpense: undefined;
 }; 

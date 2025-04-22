@@ -44,6 +44,6 @@ const CategorySchema = new mongoose.Schema({
 });
 
 // Add index for faster queries
-CategorySchema.index({ userID: 1, categoryName: 1 }, { unique: true });
+CategorySchema.index({ userId: 1, categoryName: 1 }, { unique: true });  // Fixed: using correct field name
 
 module.exports = mongoose.model("Category", CategorySchema);

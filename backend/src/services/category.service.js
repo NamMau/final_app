@@ -1,8 +1,9 @@
 const Category = require("../models/Category.model");
 
 exports.createCategory = async ({ userId, categoryName, description, icon, color, type }) => {
+    console.log('Creating category with userId:', userId);
     return await Category.create({
-        user: userId,
+        userId,  // Fixed: using correct field name
         categoryName,
         description,
         icon,
@@ -12,7 +13,8 @@ exports.createCategory = async ({ userId, categoryName, description, icon, color
 };
 
 exports.getCategories = async (userId, filters = {}) => {
-    const query = { user: userId };
+    console.log('Getting categories for userId:', userId);
+    const query = { userId: userId }; // Fixed: using correct field name
     
     // Apply filters
     if (filters.type) query.type = filters.type;
@@ -21,8 +23,10 @@ exports.getCategories = async (userId, filters = {}) => {
         query.categoryName = { $regex: filters.categoryName, $options: 'i' };
     }
 
-    return await Category.find(query)
-        .sort({ categoryName: 1 });
+    console.log('Query:', query);
+    const categories = await Category.find(query).sort({ categoryName: 1 });
+    console.log('Found categories:', categories);
+    return categories;
 };
 
 exports.getCategoryById = async (categoryID) => {

@@ -38,11 +38,19 @@ export interface UpdateCategoryDto {
 class CategoriesService {
   async getCategories(): Promise<Category[]> {
     try {
-      const response = await apiService.get<{ categories: Category[] }>(ENDPOINTS.CATEGORIES.GET_ALL);
+      console.log('Fetching categories...');
+      const response = await apiService.get<Category[]>(ENDPOINTS.CATEGORIES.GET_ALL);
+      console.log('Categories response:', response);
+
       if (!response.success || !response.data) {
+        console.error('Failed to fetch categories:', response);
         throw new Error(response.message || 'Failed to fetch categories');
       }
-      return response.data.categories.filter(category => !category.isDeleted);
+
+      // Data is now the categories array directly
+      const categories = response.data.filter(category => !category.isDeleted);
+      console.log('Filtered categories:', categories);
+      return categories;
     } catch (error) {
       console.error('Error fetching categories:', error);
       throw error;
@@ -79,8 +87,14 @@ class CategoriesService {
 
       console.log('Creating category with data:', categoryData);
 
+      console.log('Sending request to create category with data:', categoryData);
+      console.log('Current access token:', await authService.getStoredToken());
+      
       const response = await apiService.post<{ category: Category }>(ENDPOINTS.CATEGORIES.CREATE, categoryData);
+      console.log('Create category response:', response);
+      
       if (!response.success || !response.data) {
+        console.error('Failed to create category:', response);
         throw new Error(response.message || 'Failed to create category');
       }
       return response.data.category;

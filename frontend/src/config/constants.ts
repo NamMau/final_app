@@ -47,11 +47,11 @@ export const ENDPOINTS = {
     DELETE: (id: string) => `/v1/categories/delete-category-by-id/${id}`,
   },
   BUDGETS: {
-    CREATE: '/v1/budgets/create-budget',
-    GET_ALL: '/v1/budgets/get-all-budgets',
-    GET_BY_ID: (id: string) => `/v1/budgets/get-budget-by-id/${id}`,
-    UPDATE: (id: string) => `/v1/budgets/update-budget-by-id/${id}`,
-    DELETE: (id: string) => `/v1/budgets/delete-budget-by-id/${id}`,
+    CREATE: '/v1/budgets',
+    GET_ALL: '/v1/budgets',
+    GET_BY_ID: (id: string) => `/v1/budgets/${id}`,
+    UPDATE: (id: string) => `/v1/budgets/${id}`,
+    DELETE: (id: string) => `/v1/budgets/${id}`,
   },
   GOALS: {
     CREATE: '/v1/goals/create-goal',

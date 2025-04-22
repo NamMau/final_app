@@ -23,11 +23,16 @@ class ApiService {
     };
 
     const accessToken = await AsyncStorage.getItem('accessToken');
+    console.log('Retrieved access token:', accessToken);
+
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
+      console.log('Added Authorization header:', headers['Authorization']);
+    } else {
+      console.warn('No access token found, request will be unauthenticated');
     }
 
-    console.log('Request headers:', headers);
+    console.log('Final request headers:', headers);
     return headers;
   }
 

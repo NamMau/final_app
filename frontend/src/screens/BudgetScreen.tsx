@@ -1,73 +1,128 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  Image,
+  RefreshControl,
+  Alert,
+  ActivityIndicator 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FloatingActionButton from '../components/FloatingActionButton';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { Budget, budgetsService } from '../services/budgets.service';
+import { categoriesService } from '../services/categories.service';
+import { Category } from '../services/categories.service';
 
 type BudgetScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Budget'>;
 
-interface BudgetItem {
-  category: string;
-  budgeted: number;
-  used: number;
-  percentage: number;
+interface BudgetWithCategory extends Budget {
+  category?: Category;
 }
-
-const SAMPLE_BUDGETS: BudgetItem[] = [
-  {
-    category: 'Entertainment',
-    budgeted: 250.00,
-    used: 200.00,
-    percentage: 80,
-  },
-  {
-    category: 'Groceries',
-    budgeted: 500.00,
-    used: 150.00,
-    percentage: 30,
-  },
-  {
-    category: 'Shopping',
-    budgeted: 300.00,
-    used: 180.00,
-    percentage: 60,
-  },
-];
 
 const BudgetScreen = () => {
   const navigation = useNavigation<BudgetScreenNavigationProp>();
+  const [budgets, setBudgets] = useState<BudgetWithCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [categories, setCategories] = useState<{ [key: string]: Category }>({});
 
-  const renderBudgetItem = (item: BudgetItem) => (
-    <View key={item.category} style={styles.budgetItem}>
+  const loadBudgets = async () => {
+    try {
+      setLoading(true);
+      const [budgetsData, categoriesData] = await Promise.all([
+        budgetsService.getBudgets(),
+        categoriesService.getCategories()
+      ]);
+
+      // Create a map of categories for quick lookup
+      const categoryMap = categoriesData.reduce((acc, cat) => {
+        acc[cat._id] = cat;
+        return acc;
+      }, {} as { [key: string]: Category });
+      setCategories(categoryMap);
+
+      // Attach category objects to budgets
+      const budgetsWithCategories = budgetsData.map(budget => ({
+        ...budget,
+        category: categoryMap[budget.categoryID]
+      }));
+
+      setBudgets(budgetsWithCategories);
+    } catch (error) {
+      console.error('Error loading budgets:', error);
+      Alert.alert('Error', 'Failed to load budgets. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadBudgets();
+    setRefreshing(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadBudgets();
+    }, [])
+  );
+
+  const renderBudgetItem = (item: BudgetWithCategory) => (
+    <TouchableOpacity 
+      key={item._id} 
+      style={styles.budgetItem}
+      onPress={() => navigation.navigate('UpdateBudget', { budget: item })}
+    >
       <View style={styles.budgetHeader}>
         <View style={styles.categoryIcon}>
-          <Ionicons name="wallet-outline" size={24} color="#1F41BB" />
+          <Ionicons 
+            name={item.category?.icon as any || "wallet-outline"} 
+            size={24} 
+            color={item.category?.color || "#1F41BB"} 
+          />
         </View>
         <View style={styles.categoryInfo}>
-          <Text style={styles.categoryText}>{item.category}</Text>
+          <Text style={styles.categoryText}>{item.name}</Text>
           <Text style={styles.amountText}>
-            ${item.budgeted.toFixed(2)} budgeted
+            ${item.amount.toFixed(2)} budgeted • {item.period}
+          </Text>
+          <Text style={[styles.amountText, item.isOverBudget && styles.overBudget]}>
+            ${item.spent.toFixed(2)} spent
           </Text>
         </View>
-        <Text style={styles.percentageText}>{item.percentage}%</Text>
+        <Text 
+          style={[
+            styles.percentageText,
+            item.isOverBudget && styles.overBudget,
+            item.isNearThreshold && !item.isOverBudget && styles.nearThreshold
+          ]}
+        >
+          {Math.round(item.progress || 0)}%
+        </Text>
       </View>
       <View style={styles.progressBarContainer}>
         <View 
           style={[
             styles.progressBar, 
-            { width: `${item.percentage}%` }
+            { width: `${Math.min((item.progress || 0), 100)}%` },
+            item.isOverBudget && styles.overBudgetBar,
+            item.isNearThreshold && !item.isOverBudget && styles.nearThresholdBar
           ]} 
         />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const handleAddBudget = () => {
-    // Navigate to create budget screen
-    // navigation.navigate('CreateBudget');
+    navigation.navigate('CreateBudget');
   };
 
   return (
@@ -99,8 +154,30 @@ const BudgetScreen = () => {
 
       {/* Content */}
       <View style={styles.content}>
-        <ScrollView style={styles.scrollView}>
-          {SAMPLE_BUDGETS.map(renderBudgetItem)}
+        <ScrollView 
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1F41BB"
+            />
+          }
+        >
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1F41BB" />
+              <Text style={styles.loadingText}>Loading budgets...</Text>
+            </View>
+          ) : budgets.length > 0 ? (
+            budgets.map(renderBudgetItem)
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="wallet-outline" size={64} color="#1F41BB" />
+              <Text style={styles.emptyText}>No budgets yet</Text>
+              <Text style={styles.emptySubtext}>Create your first budget to start tracking expenses</Text>
+            </View>
+          )}
 
           <View style={styles.createSection}>
             <Text style={styles.createTitle}>Set up budgets for your spending</Text>
@@ -254,6 +331,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F4FF',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  overBudget: {
+    color: '#DC2626',
+  },
+  nearThreshold: {
+    color: '#F59E0B',
+  },
+  overBudgetBar: {
+    backgroundColor: '#DC2626',
+  },
+  nearThresholdBar: {
+    backgroundColor: '#F59E0B',
   },
   headerLeft: {
     flexDirection: 'row',
