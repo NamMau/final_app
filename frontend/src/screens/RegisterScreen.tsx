@@ -60,16 +60,22 @@ const RegisterScreen = () => {
     }
   
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images' as ImagePicker.MediaType,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
-      base64: true, // Nếu muốn gửi dạng base64
+      base64: true
     });
   
     if (!result.canceled && result.assets.length > 0) {
       const picked = result.assets[0];
-      setAvatar(picked.uri);
+      if (picked.base64) {
+        // Store both URI for display and base64 for upload
+        setAvatar(picked.base64);
+        console.log('Image selected and converted to base64');
+      } else {
+        Alert.alert('Error', 'Could not get image data');
+      }
     }
   }
 
@@ -92,7 +98,8 @@ const RegisterScreen = () => {
 
     try {
       setIsLoading(true);
-      const response = await apiService.post<RegisterResponse>(ENDPOINTS.AUTH.REGISTER, {
+      // Create registration data
+      const registrationData = {
         userName,
         fullName,
         email,
@@ -100,8 +107,11 @@ const RegisterScreen = () => {
         dateOfBirth: dateOfBirth.toISOString(),
         phoneNumber,
         address,
-        avatar
-      });
+        avatar: avatar || undefined
+      };
+
+      console.log('Sending registration data:', registrationData);
+      const response = await apiService.post<RegisterResponse>(ENDPOINTS.AUTH.REGISTER, registrationData);
 
       if (response.success && response.data) {
         // Lưu token và dữ liệu người dùng vào AsyncStorage
@@ -144,7 +154,7 @@ const RegisterScreen = () => {
           disabled={isLoading}
         >
           {avatar ? (
-            <Image source={{ uri: avatar }} style={styles.avatarPreview} />
+            <Image source={{ uri: `data:image/jpeg;base64,${avatar}` }} style={styles.avatarPreview} />
           ) : (
             <Text style={styles.avatarText}>Pick Profile Picture</Text>
           )}

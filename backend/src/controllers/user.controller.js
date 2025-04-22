@@ -23,12 +23,12 @@ exports.getUserById = async (req, res) => {
 exports.getProfile = async (req,res) =>{
     try{
         const userId = req.user.id;
-        //const userID = req.params.id;
         const user = await userService.getUserById(userId);
         if(!user){
             return res.status(404).json({success: false, message:"User not found", data: null});
         }
-        res.status(200).json({success: true, data: {user}});
+        // Return user data directly in the data field
+        res.status(200).json({success: true, data: user});
     }catch(error){
         res.status(500).json({success: false, message: error.message});
     }

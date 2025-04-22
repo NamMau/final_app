@@ -37,19 +37,32 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     const contentType = response.headers.get('content-type');
     const text = await response.text();
+    console.log('API Response Text:', text);
+    console.log('Content-Type:', contentType);
     
     let data;
-    if (contentType?.includes('application/json')) {
+    try {
+      // Always try to parse as JSON first
       data = JSON.parse(text);
-    } else {
+      console.log('Parsed JSON data:', data);
+    } catch (e) {
+      console.warn('Failed to parse response as JSON:', e);
       data = text;
     }
 
     if (!response.ok) {
       const errorMessage = data?.message || `Request failed with status ${response.status}`;
+      console.error('API Error:', errorMessage);
       throw { message: errorMessage, status: response.status };
     }
 
+    // If the response is already in ApiResponse format
+    if (data?.success !== undefined && data?.data !== undefined) {
+      console.log('Response is in ApiResponse format:', data);
+      return data as ApiResponse<T>;
+    }
+
+    // If the response is the direct data
     return {
       success: true,
       message: 'Success',
@@ -107,17 +120,28 @@ class ApiService {
         const queryString = new URLSearchParams(stringParams).toString();
         url += `?${queryString}`;
       }
-  
+
+      console.log('Making GET request to:', url);
       const headers = await this.getHeaders();
+      console.log('With headers:', headers);
+
       const response = await fetch(url, {
         method: 'GET',
         headers
       });
-  
-      return this.handleResponse<T>(response, { url, method: 'GET', headers });
-    } catch (error: unknown) {
+
+      console.log('GET Response status:', response.status);
+      return await this.handleResponse<T>(response, { url, method: 'GET', headers });
+    } catch (error: any) {
       console.error('GET request error:', error);
-      return { success: false, message: 'Failed to fetch data', data: undefined };
+      if (error.status === 401) {
+        // Try to refresh token and retry the request
+        const newToken = await this.refreshAccessToken();
+        if (newToken) {
+          return this.get<T>(endpoint, params);
+        }
+      }
+      throw error; // Let the component handle the error
     }
   }
   
@@ -126,23 +150,28 @@ class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const headers = await this.getHeaders();
 
-    // Thiết lập timeout/abort
+    // Set up timeout/abort
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     let rawResponse: Response;
     try {
+      // If data is FormData, don't set Content-Type (browser will set it with boundary)
+      if (data instanceof FormData) {
+        delete headers['Content-Type'];
+      }
+
       rawResponse = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(data),
+        body: data instanceof FormData ? data : JSON.stringify(data),
         signal: controller.signal
       });
     } finally {
       clearTimeout(timeoutId);
     }
 
-    // Đọc và parse JSON thành ApiResponse<T>
+    // Read and parse response
     const text = await rawResponse.text();
     let parsed: ApiResponse<T>;
     try {
@@ -151,13 +180,13 @@ class ApiService {
       throw { message: 'Invalid JSON from server', status: rawResponse.status };
     }
 
-    // Nếu HTTP error, ném với message từ server
+    // If HTTP error, throw with server message
     if (!rawResponse.ok) {
       const errMsg = parsed.message || `Request failed with status ${rawResponse.status}`;
       throw { message: errMsg, status: rawResponse.status };
     }
 
-    // Trả về đúng wrapper từ server
+    // Return proper wrapper from server
     return {
       success: parsed.success,
       message: parsed.message,

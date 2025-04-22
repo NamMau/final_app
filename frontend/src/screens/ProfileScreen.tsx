@@ -8,11 +8,12 @@ import { RootStackParamList } from '../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/auth.service';
 import { userService } from '../services/users.service';
+import { API_URL } from '../config/constants';
 
 type ProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Profile'>;
 
 interface UserData {
-  id: string;
+  _id: string;
   userName: string;
   email: string;
   fullName: string;
@@ -21,48 +22,66 @@ interface UserData {
   avatar: string;
   dateOfBirth: string;
   createdAt: string;
-  accountInfo: {
-    accountId: string;
-    totalBalance: number;
-    currency: string;
-  };
+  accountId?: string;
+  totalBalance?: number;
+  currency?: string;
 }
 
 const ProfileScreen = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [userData, setUserData] = useState<UserData | null>(null);
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const token = await authService.getStoredToken();
-        if (!token) return;
-
-        const profile = await userService.getProfile(token);
-
-        const userDataFormatted: UserData = {
-          id: profile._id,
-          userName: profile.userName,
-          email: profile.email,
-          fullName: profile.fullName,
-          phoneNumber: profile.phoneNumber,
-          address: profile.address,
-          avatar: profile.avatar,
-          dateOfBirth: profile.dateOfBirth,
-          createdAt: profile.createdAt,
-          accountInfo: {
-            accountId: profile.accountId,
-            totalBalance: profile.totalBalance,
-            currency: profile.currency,
-          },
-        };
-
-        setUserData(userDataFormatted);
-        await AsyncStorage.setItem('user', JSON.stringify(userDataFormatted));
-      } catch (error) {
-        console.error('Error fetching profile', error);
+  const loadUserData = async () => {
+    try {
+      console.log('Starting to load user data...');
+      const token = await authService.getStoredToken();
+      console.log('Token status:', token ? 'Token exists' : 'No token');
+      if (!token) {
+        console.warn('No authentication token found');
+        return;
       }
-    };
+
+      console.log('Fetching profile data...');
+      const profile = await userService.getProfile();
+      console.log('Profile response:', profile);
+      console.log('Avatar URL:', profile.avatar);
+      
+      if(!profile){
+        console.warn('Profile is undefined!');
+        return;
+      }
+
+      console.log('Processing profile data:', profile);
+      const userDataFormatted: UserData = {
+        _id: profile._id,
+        userName: profile.userName,
+        email: profile.email,
+        fullName: profile.fullName,
+        phoneNumber: profile.phoneNumber,
+        address: profile.address,
+        avatar: profile.avatar,
+        dateOfBirth: profile.dateOfBirth,
+        createdAt: profile.createdAt,
+        accountId: profile.accountId || '',
+        totalBalance: profile.totalBalance || 0,
+        currency: profile.currency || 'USD'
+      };
+
+      console.log('Formatted user data:', userDataFormatted);
+      setUserData(userDataFormatted);
+      await AsyncStorage.setItem('user', JSON.stringify(userDataFormatted));
+      console.log('User data saved successfully');
+    } catch (error: any) {
+      console.error('Error in loadUserData:', error);
+      if (error.message) {
+        console.error('Error message:', error.message);
+      }
+      // Clear user data on error to prevent showing stale data
+      setUserData(null);
+    }
+  };
+
+  useEffect(() => {
     loadUserData();
   }, []);
 
@@ -108,7 +127,21 @@ const ProfileScreen = () => {
 
       <ScrollView style={styles.content}>
         <View style={styles.profileSection}>
-          <Image source={{uri: userData?.avatar}} style={styles.profileImage}/>
+          <Image 
+            source={{
+              uri: userData?.avatar 
+                ? `${API_URL}/${userData.avatar.replace(/^\//, '')}` 
+                : 'https://www.gravatar.com/avatar/default?s=200'
+            }} 
+            style={styles.profileImage}
+          />
+          {userData?.fullName ? (
+            <View style={[styles.profileImage, styles.defaultAvatarContainer]}>
+              <Text style={styles.defaultAvatarText}>
+                {userData.fullName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.userName}>{userData?.fullName || 'Loading...'}</Text>
           <Text style={styles.userEmail}>{userData?.email || ''}</Text>
         </View>
@@ -152,10 +185,10 @@ const ProfileScreen = () => {
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Total Balance</Text>
             <Text style={styles.balanceAmount}>
-              {userData?.accountInfo ? formatCurrency(userData.accountInfo.totalBalance) : '-'}
+              {userData?.totalBalance !== undefined ? formatCurrency(userData.totalBalance) : '-'}
             </Text>
             <Text style={styles.accountId}>
-              Account ID: {userData?.accountInfo?.accountId || '-'}
+              Account ID: {userData?.accountId || '-'}
             </Text>
           </View>
         </View>
@@ -272,7 +305,16 @@ const styles = StyleSheet.create({
   },
   menuText: { fontSize: 16, color: '#000' },
   logoutButton: { marginTop: 20 },
-  
+  defaultAvatarContainer: {
+    backgroundColor: '#7c8a97', // Màu nền cho avatar mặc định
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  defaultAvatarText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  }
 });
 
 export default ProfileScreen;

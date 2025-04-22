@@ -2,6 +2,8 @@ import { API_URL, ENDPOINTS } from '../config/constants';
 import { apiService } from './api';
 import { authService } from './auth.service';
 
+import { UserData } from './auth.service';
+
 export interface Category {
   _id: string;
   userId: string;
@@ -49,19 +51,30 @@ class CategoriesService {
 
   async createCategory(data: CreateCategoryDto): Promise<Category> {
     try {
-      const userData = await authService.getStoredUserData();
-      console.log('User data:', userData);
-
-      if (!userData) {
+      // First check if we have a valid token
+      const token = await authService.getStoredToken();
+      if (!token) {
+        console.error('No authentication token found');
         throw new Error('User not authenticated');
       }
 
-      if (!userData.id) {
-        throw new Error('User ID not found in user data');
+      // Then get user data
+      const userData = await authService.getStoredUserData();
+      console.log('Retrieved user data for category creation:', userData);
+
+      if (!userData) {
+        console.error('No user data found');
+        throw new Error('User not authenticated');
+      }
+
+      if (!userData._id) {
+        console.error('User data is missing _id field:', userData);
+        throw new Error('Invalid user data structure');
       }
 
       const categoryData = {
-        ...data
+        ...data,
+        userId: userData._id
       };
 
       console.log('Creating category with data:', categoryData);

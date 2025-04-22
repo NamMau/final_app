@@ -15,6 +15,10 @@ export interface User {
   lastLogin: string;
   createdAt: string;
   updatedAt: string;
+  // Account information
+  accountId?: string;
+  totalBalance?: number;
+  currency?: string;
 }
 
 export interface UpdateProfileDto {
@@ -29,11 +33,15 @@ export interface UpdateProfileDto {
 class UserService {
   async getProfile(): Promise<User> {
     try {
-      const response = await apiService.get<{ user: User }>(ENDPOINTS.USER.GET_PROFILE);
+      console.log('Calling GET_PROFILE endpoint:', ENDPOINTS.USER.GET_PROFILE);
+      const response = await apiService.get<User>(ENDPOINTS.USER.GET_PROFILE);
+      console.log('Profile API response:', response);
+
       if (!response.success || !response.data) {
+        console.error('Profile API error:', response.message);
         throw new Error(response.message || 'Failed to fetch profile');
       }
-      return response.data.user;
+      return response.data;
     } catch (error) {
       console.error('Error getting user profile:', error);
       throw error;

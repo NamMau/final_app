@@ -1,7 +1,7 @@
 const User = require("../models/User.model");
+const Account = require("../models/Account.model");
 const {generateAccessToken} = require("../utils/tokenUtils");
 const bcrypt = require("bcryptjs");
-console.log("Bcrypt module:", bcrypt);
 
 exports.createUser = async ({
     userName,
@@ -32,7 +32,21 @@ exports.createUser = async ({
 };
 
 exports.getUserById = async (userId) => {
-    return await User.findById(userId).select("-password");
+    const user = await User.findById(userId).select("-password");
+    if (!user) return null;
+
+    // Get account information
+    const account = await Account.findOne({ userId: user._id });
+    
+    // Combine user and account data
+    const userWithAccount = user.toObject();
+    if (account) {
+        userWithAccount.accountId = account._id;
+        userWithAccount.totalBalance = account.totalBalance;
+        userWithAccount.currency = 'USD'; // Default currency
+    }
+
+    return userWithAccount;
 };
 
 exports.getUsers = async (filters = {}) => {
