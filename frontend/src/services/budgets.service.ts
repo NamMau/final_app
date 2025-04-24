@@ -2,10 +2,12 @@ import { API_URL, ENDPOINTS } from '../config/constants';
 import { apiService } from './api';
 import { authService } from './auth.service';
 
+import { Category } from './categories.service';
+
 export interface Budget {
   _id: string;
   userId: string;
-  categoryID: string;
+  categoryID: string | Category;
   name: string;
   amount: number;
   spent: number;
@@ -55,16 +57,21 @@ class BudgetsService {
     try {
       console.log('Fetching budgets with filters:', filters);
       // Convert filters to URLSearchParams
-      const params = new URLSearchParams();
+      let endpoint = ENDPOINTS.BUDGETS.GET_ALL;
       if (filters) {
+        const params = new URLSearchParams();
         if (filters.categoryID) params.append('categoryID', filters.categoryID);
         if (filters.period) params.append('period', filters.period);
         if (filters.isActive !== undefined) params.append('isActive', filters.isActive.toString());
         if (filters.startDate) params.append('startDate', filters.startDate);
         if (filters.endDate) params.append('endDate', filters.endDate);
+        const queryString = params.toString();
+        if (queryString) {
+          endpoint += '?' + queryString;
+        }
       }
 
-      const response = await apiService.get<Budget[]>(ENDPOINTS.BUDGETS.GET_ALL + '?' + params.toString());
+      const response = await apiService.get<Budget[]>(endpoint);
       console.log('Budgets response:', response);
 
       if (!response.success || !response.data) {
@@ -95,6 +102,7 @@ class BudgetsService {
   async createBudget(data: CreateBudgetDto): Promise<Budget> {
     try {
       console.log('Creating budget with data:', data);
+      console.log('Using endpoint:', ENDPOINTS.BUDGETS.CREATE);
       const response = await apiService.post<Budget>(ENDPOINTS.BUDGETS.CREATE, data);
       console.log('Create budget response:', response);
 
@@ -112,7 +120,7 @@ class BudgetsService {
   async updateBudget(id: string, data: UpdateBudgetDto): Promise<Budget> {
     try {
       console.log('Updating budget:', { id, data });
-      const response = await apiService.put<Budget>(`${ENDPOINTS.BUDGETS.UPDATE}/${id}`, data);
+      const response = await apiService.put<Budget>(ENDPOINTS.BUDGETS.UPDATE(id), data);
       console.log('Update budget response:', response);
 
       if (!response.success || !response.data) {

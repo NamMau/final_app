@@ -3,6 +3,11 @@ const budgetService = require("../services/budget.service");
 
 exports.createBudget = async (req, res) => {
     try {
+        console.log('Request body:', req.body);
+        console.log('User:', req.user);
+        console.log('User ID from req.user:', req.user.id);
+        console.log('User ID from req.user._id:', req.user._id);
+
         const userId = req.user.id; // Get from authenticated user
         const { 
             categoryID, 
@@ -14,7 +19,7 @@ exports.createBudget = async (req, res) => {
             alertThreshold 
         } = req.body;
         
-        console.log('Creating budget with data:', { userId, categoryID, name, amount, period });
+        console.log('Creating budget with data:', { userId, categoryID, name, amount, period, startDate, endDate, alertThreshold });
         
         const budget = await budgetService.createBudget({
             userId,
@@ -26,6 +31,8 @@ exports.createBudget = async (req, res) => {
             endDate,
             alertThreshold
         });
+
+        console.log('Created budget:', budget);
         
         res.status(201).json({ 
             success: true, 
@@ -160,9 +167,9 @@ exports.getBudgets = async (req, res) => {
         const budgets = await budgetService.getBudgets(userId, { 
             categoryID, 
             period, 
-            isActive: isActive === 'true',
-            startDate,
-            endDate
+            isActive: isActive ? (isActive === 'true') : undefined,
+            startDate: startDate ? new Date(startDate) : undefined,
+            endDate: endDate ? new Date(endDate) : undefined
         });
 
         res.status(200).json({ 

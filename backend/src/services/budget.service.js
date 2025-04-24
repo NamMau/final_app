@@ -35,7 +35,7 @@ exports.createBudget = async ({ userId, categoryID, name, amount, spent = 0, per
     // Validate period and set correct start/end dates
     const validatedDates = calculateBudgetDates(period, startDate, endDate);
     
-    return await Budget.create({
+    const budget = await Budget.create({
         userId,  // Fixed: using correct field name
         categoryID, // Fixed: using correct field name
         name,
@@ -47,6 +47,9 @@ exports.createBudget = async ({ userId, categoryID, name, amount, spent = 0, per
         alertThreshold,
         isActive
     });
+
+    // Populate categoryID and return
+    return await budget.populate('categoryID');
 };
 
 exports.getBudgets = async (userId, filters = {}) => {
@@ -55,7 +58,7 @@ exports.getBudgets = async (userId, filters = {}) => {
     // Apply filters
     if (filters.categoryID) query.categoryID = filters.categoryID;
     if (filters.period) query.period = filters.period;
-    if (filters.isActive !== undefined) query.isActive = filters.isActive;
+    if (filters.isActive === true || filters.isActive === false) query.isActive = filters.isActive;
     
     // Date filtering
     if (filters.startDate || filters.endDate) {
@@ -132,6 +135,22 @@ exports.updateBudget = async (budgetID, { name, amount, spent, period, startDate
         progress,
         isOverBudget: progress > 100,
         isNearThreshold: progress >= updatedBudget.alertThreshold
+    };
+};
+
+exports.getBudgetById = async (budgetID) => {
+    const budget = await Budget.findById(budgetID).populate('categoryID');
+    if (!budget) {
+        throw new Error('Budget not found');
+    }
+
+    // Calculate progress
+    const progress = (budget.spent / budget.amount) * 100;
+    return {
+        ...budget.toObject(),
+        progress,
+        isOverBudget: progress > 100,
+        isNearThreshold: progress >= budget.alertThreshold
     };
 };
 

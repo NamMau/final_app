@@ -19,10 +19,12 @@ import { RootStackParamList } from '../navigation/types';
 import { Budget, budgetsService } from '../services/budgets.service';
 import { categoriesService } from '../services/categories.service';
 import { Category } from '../services/categories.service';
+import { ApiResponse } from '../services/api';
 
 type BudgetScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Budget'>;
 
-interface BudgetWithCategory extends Budget {
+interface BudgetWithCategory extends Omit<Budget, 'categoryID'> {
+  categoryID: string | Category;
   category?: Category;
 }
 
@@ -35,25 +37,44 @@ const BudgetScreen = () => {
 
   const loadBudgets = async () => {
     try {
+      console.log('Starting to load budgets...');
       setLoading(true);
       const [budgetsData, categoriesData] = await Promise.all([
         budgetsService.getBudgets(),
         categoriesService.getCategories()
       ]);
 
+      console.log('Budgets data:', budgetsData);
+      console.log('Categories data:', categoriesData);
+
+      if (!budgetsData || !categoriesData) {
+        throw new Error('Invalid data format received from API');
+      }
+
       // Create a map of categories for quick lookup
-      const categoryMap = categoriesData.reduce((acc, cat) => {
+      const categoryMap = categoriesData.reduce((acc: { [key: string]: Category }, cat: Category) => {
         acc[cat._id] = cat;
         return acc;
-      }, {} as { [key: string]: Category });
+      }, {});
       setCategories(categoryMap);
 
       // Attach category objects to budgets
-      const budgetsWithCategories = budgetsData.map(budget => ({
-        ...budget,
-        category: categoryMap[budget.categoryID]
-      }));
+      const budgetsWithCategories = budgetsData.map((budget: Budget) => {
+        let category: Category | undefined;
 
+        if (typeof budget.categoryID === 'string') {
+          category = categoryMap[budget.categoryID];
+        } else if (budget.categoryID && typeof budget.categoryID === 'object' && 'categoryName' in budget.categoryID) {
+          category = budget.categoryID as Category;
+        }
+
+        return {
+          ...budget,
+          category
+        };
+      });
+
+      console.log('Budgets with categories:', budgetsWithCategories);
       setBudgets(budgetsWithCategories);
     } catch (error) {
       console.error('Error loading budgets:', error);
@@ -71,8 +92,12 @@ const BudgetScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      loadBudgets();
-    }, [])
+      const unsubscribe = navigation.addListener('focus', () => {
+        loadBudgets();
+      });
+
+      return unsubscribe;
+    }, [navigation])
   );
 
   const renderBudgetItem = (item: BudgetWithCategory) => (
@@ -169,7 +194,7 @@ const BudgetScreen = () => {
               <ActivityIndicator size="large" color="#1F41BB" />
               <Text style={styles.loadingText}>Loading budgets...</Text>
             </View>
-          ) : budgets.length > 0 ? (
+          ) : budgets?.length > 0 ? (
             budgets.map(renderBudgetItem)
           ) : (
             <View style={styles.emptyContainer}>

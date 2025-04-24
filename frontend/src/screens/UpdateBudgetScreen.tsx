@@ -8,7 +8,12 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  Dimensions,
 } from 'react-native';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -33,6 +38,8 @@ const UpdateBudgetScreen = () => {
   const [deleting, setDeleting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
 
   const [formData, setFormData] = useState({
     name: budget.name,
@@ -195,40 +202,32 @@ const UpdateBudgetScreen = () => {
             />
           </View>
 
-          {/* Category Picker */}
+          {/* Category */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Category</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.categoryID}
-                onValueChange={(value: string) => setFormData(prev => ({ ...prev, categoryID: value }))}
-                style={styles.picker}
-              >
-                {categories.map((category) => (
-                  <Picker.Item 
-                    key={category._id} 
-                    label={category.categoryName} 
-                    value={category._id} 
-                  />
-                ))}
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.dropdownButton}
+              onPress={() => setShowCategoryModal(true)}
+            >
+              <Text style={styles.dropdownButtonText}>
+                {categories.find(c => c._id === formData.categoryID)?.categoryName || 'Select Category'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
           </View>
 
-          {/* Period Picker */}
+          {/* Period */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Period</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.period}
-                onValueChange={(value: 'weekly' | 'monthly' | 'yearly') => setFormData(prev => ({ ...prev, period: value }))}
-                style={styles.picker}
-              >
-                <Picker.Item label="Weekly" value="weekly" />
-                <Picker.Item label="Monthly" value="monthly" />
-                <Picker.Item label="Yearly" value="yearly" />
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.dropdownButton}
+              onPress={() => setShowPeriodModal(true)}
+            >
+              <Text style={styles.dropdownButtonText}>
+                {formData.period.charAt(0).toUpperCase() + formData.period.slice(1)}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
           </View>
 
           {/* Start Date */}
@@ -312,6 +311,50 @@ const UpdateBudgetScreen = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Category Modal */}
+      <Modal visible={showCategoryModal} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCategoryModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Category</Text>
+            <ScrollView>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category._id}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setFormData(prev => ({ ...prev, categoryID: category._id }));
+                    setShowCategoryModal(false);
+                  }}
+                >
+                  <Text>{category.categoryName}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Period Modal */}
+      <Modal visible={showPeriodModal} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPeriodModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Period</Text>
+            {['Weekly', 'Monthly', 'Yearly'].map((period) => (
+              <TouchableOpacity
+                key={period}
+                style={styles.modalItem}
+                onPress={() => {
+                  setFormData(prev => ({ ...prev, period: period.toLowerCase() as 'weekly' | 'monthly' | 'yearly' }));
+                  setShowPeriodModal(false);
+                }}
+              >
+                <Text>{period}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -407,14 +450,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#FFFFFF',
   },
-  pickerContainer: {
+  dropdownButton: {
+    height: 50,
     borderWidth: 1,
     borderColor: '#E0E0E0',
     borderRadius: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
   },
-  picker: {
-    height: 50,
+  dropdownButtonText: {
+    fontSize: 16,
+    color: '#333333',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: '#00000050',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: SCREEN_HEIGHT * 0.5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  modalItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   dateButton: {
     height: 50,

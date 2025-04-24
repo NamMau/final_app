@@ -1,7 +1,7 @@
 import { API_URL, API_KEY } from '../config/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface ApiResponse<T = any> {
+export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
   data?: T;
@@ -135,12 +135,11 @@ class ApiService {
         headers
       });
 
-      console.log('GET Response status:', response.status);
-      return await this.handleResponse<T>(response, { url, method: 'GET', headers });
-    } catch (error: any) {
+      console.log('GET response status:', response.status);
+      return this.handleResponse<T>(response, { url, method: 'GET', headers });
+    } catch (error: unknown) {
       console.error('GET request error:', error);
-      if (error.status === 401) {
-        // Try to refresh token and retry the request
+      if (error instanceof Error && error.message === 'Token expired') {
         const newToken = await this.refreshAccessToken();
         if (newToken) {
           return this.get<T>(endpoint, params);
