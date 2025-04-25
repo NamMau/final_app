@@ -7,18 +7,59 @@ export interface BillItem {
   price: number;
 }
 
-export interface Bill {
-  id: string;
-  userId: string;
-  date: Date;
-  total: number;
-  items: BillItem[];
-  image?: string;
-  status: 'pending' | 'paid' | 'overdue';
-  categoryId?: string;
+export interface Category {
+  _id: string;
+  name: string;
   type: 'expense' | 'income';
-  createdAt: Date;
-  updatedAt: Date;
+  color?: string;
+  icon?: string;
+}
+
+export interface Budget {
+  _id: string;
+  name: string;
+  amount: number;
+  spent: number;
+  period: 'weekly' | 'monthly' | 'yearly';
+  startDate: string;
+  endDate: string;
+  alertThreshold: number;
+  isActive: boolean;
+  categoryID: Category;
+}
+
+export interface Bill {
+  _id: string;
+  user?: string;  
+  billName: string;
+  amount: number;
+  dueDate: string;
+  status: 'paid' | 'unpaid' | 'overdue';
+  type: 'manual' | 'ocr';
+  budget: Budget;
+  description?: string;
+  location?: string;
+  createdAt: string;
+  updatedAt: string;
+  tags?: string[];
+}
+
+export interface BillResponse {
+  success: boolean;
+  message?: string;
+  bill?: Bill;
+  budgetDetails?: {
+    billAmount: number;
+    currentSpent: number;
+    newTotal: number;
+    budgetAmount: number;
+    threshold: number;
+    percentage: number;
+  };
+  error?: {
+    type: string;
+    details: any;
+  };
 }
 
 export interface ExpenseSummary {
@@ -81,11 +122,25 @@ export const billsService = {
     endDate?: string;
   }): Promise<Bill[]> {
     try {
-      const response = await apiService.get<Bill[]>(ENDPOINTS.BILLS.GET_ALL, params);
+      console.log('Calling getBills API...');
+      const response = await apiService.get<Bill[]>(ENDPOINTS.BILLS.GET_ALL);
+      console.log('Raw API response:', response);
+      
       if (!response.data) {
+        console.log('No response.data');
         return [];
       }
-      return response.data;
+      
+      const bills = response.data;
+      console.log('API response data:', bills);
+      
+      if (!Array.isArray(bills)) {
+        console.log('Response is not an array');
+        return [];
+      }
+      
+      console.log('Parsed bills:', bills);
+      return bills;
     } catch (error) {
       console.error('Error getting bills:', error);
       throw error;
@@ -107,30 +162,66 @@ export const billsService = {
   },
 
   // Create new bill
-  async createBill(bill: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>): Promise<Bill> {
+  async createBill(data: {
+    billName: string;
+    amount: number;
+    dueDate: string;
+    budget: string;
+    description?: string;
+    type?: 'manual' | 'ocr';
+    location?: string;
+    forceCreate?: boolean;
+  }): Promise<BillResponse> {
     try {
-      const response = await apiService.post<Bill>(ENDPOINTS.BILLS.BASE, bill);
+      const response = await apiService.post<Bill>(ENDPOINTS.BILLS.CREATE, data);
       if (!response.data) {
         throw new Error('Failed to create bill');
       }
-      return response.data;
-    } catch (error) {
+      return {
+        success: true,
+        bill: response.data
+      };
+    } catch (error: any) {
       console.error('Error creating bill:', error);
-      throw error;
+      if (error.response?.data) {
+        return error.response.data as BillResponse;
+      }
+      return {
+        success: false,
+        message: error.message || 'Failed to create bill'
+      };
     }
   },
 
   // Update bill
-  async updateBill(id: string, updates: Partial<Bill>): Promise<Bill> {
+  async updateBill(id: string, updates: {
+    billName?: string;
+    amount?: number;
+    dueDate?: string;
+    status?: 'paid' | 'unpaid' | 'overdue';
+    type?: 'manual' | 'ocr';
+    budgetId?: string;
+    description?: string;
+    location?: string;
+  }): Promise<BillResponse> {
     try {
       const response = await apiService.put<Bill>(`${ENDPOINTS.BILLS.BASE}/${id}`, updates);
       if (!response.data) {
         throw new Error('Failed to update bill');
       }
-      return response.data;
-    } catch (error) {
+      return {
+        success: true,
+        bill: response.data
+      };
+    } catch (error: any) {
       console.error('Error updating bill:', error);
-      throw error;
+      if (error.response?.data) {
+        return error.response.data as BillResponse;
+      }
+      return {
+        success: false,
+        message: error.message || 'Failed to update bill'
+      };
     }
   },
 

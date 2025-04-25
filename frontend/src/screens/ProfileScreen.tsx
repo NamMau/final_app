@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, Platform, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -30,6 +30,8 @@ interface UserData {
 const ProfileScreen = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [newBalance, setNewBalance] = useState('');
 
   const loadUserData = async () => {
     try {
@@ -85,6 +87,18 @@ const ProfileScreen = () => {
     loadUserData();
   }, []);
 
+  // Listen for balance updates from other screens
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      const params = navigation.getState().routes.find(r => r.name === 'Profile')?.params;
+      if (params && 'balanceUpdated' in params && params.balanceUpdated) {
+        loadUserData();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -97,8 +111,29 @@ const ProfileScreen = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  const handleUpdateBalance = async (newBalance: number) => {
+    try {
+      const updatedUser = await userService.updateBalance({
+        totalBalance: newBalance,
+        currency: 'VND'
+      });
+      if (updatedUser) {
+        setUserData(prevData => ({
+          ...prevData!,
+          totalBalance: updatedUser.totalBalance,
+          currency: updatedUser.currency
+        }));
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Error updating balance:', error);
+    }
   };
 
   const handleLogout = async () => {
@@ -182,15 +217,44 @@ const ProfileScreen = () => {
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>Account Balance</Text>
 
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Total Balance</Text>
+          <TouchableOpacity 
+            style={styles.balanceCard}
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                Alert.prompt(
+                  'Update Balance',
+                  'Enter your new balance:',
+                  [{
+                    text: 'Cancel',
+                    style: 'cancel'
+                  },
+                  {
+                    text: 'Update',
+                    onPress: (value) => {
+                      if (value && !isNaN(Number(value))) {
+                        handleUpdateBalance(Number(value));
+                      }
+                    }
+                  }],
+                  'plain-text',
+                  '',
+                  'number-pad'
+                );
+              } else {
+                setModalVisible(true);
+              }
+            }}
+          >
+            <View style={styles.balanceCardContent}>
+              <Text style={styles.balanceLabel}>Total Balance (tap to update)</Text>
             <Text style={styles.balanceAmount}>
               {userData?.totalBalance !== undefined ? formatCurrency(userData.totalBalance) : '-'}
             </Text>
-            <Text style={styles.accountId}>
-              Account ID: {userData?.accountId || '-'}
-            </Text>
-          </View>
+            {userData?.accountId && (
+                <Text style={styles.accountId}>Account ID: {userData.accountId}</Text>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.menuSection}>
@@ -214,14 +278,46 @@ const ProfileScreen = () => {
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                Alert.prompt(
+                  'Update Balance',
+                  'Enter your new balance:',
+                  [{
+                    text: 'Cancel',
+                    style: 'cancel'
+                  },
+                  {
+                    text: 'Update',
+                    onPress: (value) => {
+                      if (value && !isNaN(Number(value))) {
+                        handleUpdateBalance(Number(value));
+                      }
+                    }
+                  }],
+                  'plain-text',
+                  '',
+                  'number-pad'
+                );
+              } else {
+                setModalVisible(true);
+              }
+            }}
+          >
             <View style={styles.menuItemLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#E5E5FF' }]}>
                 <Ionicons name="wallet-outline" size={20} color="#1F41BB" />
               </View>
-              <Text style={styles.menuText}>My Wallets</Text>
+              <Text style={styles.menuText}>Update Balance</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <View style={styles.menuRight}>
+              <Text style={styles.balanceText}>
+                {userData?.totalBalance ? formatCurrency(userData.totalBalance) : '0 VND'}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color="#666" />
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>
@@ -245,11 +341,101 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Update Balance</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              placeholder="Enter new balance"
+              value={newBalance}
+              onChangeText={setNewBalance}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setModalVisible(false);
+                  setNewBalance('');
+                }}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.updateButton]}
+                onPress={() => {
+                  if (newBalance && !isNaN(Number(newBalance))) {
+                    handleUpdateBalance(Number(newBalance));
+                    setModalVisible(false);
+                    setNewBalance('');
+                  }
+                }}
+              >
+                <Text style={styles.buttonText}>Update</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    width: '80%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    width: '100%',
+    marginBottom: 15,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    borderRadius: 8,
+    padding: 12,
+    width: '45%',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#ff4444',
+  },
+  updateButton: {
+    backgroundColor: '#1F41BB',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row',
@@ -277,14 +463,22 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 14, color: '#666', marginBottom: 4 },
   infoValue: { fontSize: 16, color: '#000' },
   balanceCard: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#1F41BB',
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    marginTop: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  balanceCardContent: {
+    flex: 1,
   },
   balanceLabel: { fontSize: 14, color: '#666' },
-  balanceAmount: { fontSize: 24, fontWeight: 'bold', color: '#1F41BB', marginVertical: 8 },
-  accountId: { fontSize: 12, color: '#999' },
+  balanceAmount: { fontSize: 24, fontWeight: 'bold', color: '#FFFFFF', marginVertical: 8 },
+  accountId: { fontSize: 12, color: '#FFFFFF' },
   menuSection: { paddingHorizontal: 20, paddingVertical: 16 },
   menuItem: {
     flexDirection: 'row',
@@ -314,6 +508,16 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  menuRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  balanceText: {
+    fontSize: 16,
+    color: '#1F41BB',
+    fontWeight: '600'
   }
 });
 

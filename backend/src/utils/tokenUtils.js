@@ -2,8 +2,13 @@ const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
 dotenv.config();
 
+console.log('=== Token Utils ===');
+console.log('JWT_SECRET:', process.env.JWT_SECRET);
+console.log('JWT_REFRESH_SECRET:', process.env.JWT_REFRESH_SECRET);
+
 // Generate an access token
 exports.generateAccessToken = (userId) => {
+    console.log('Generating access token for user:', userId);
     return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
 

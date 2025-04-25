@@ -1,6 +1,8 @@
-const { Bill } = require('../models/Bill.model');
+const Bill = require('../models/Bill.model');
+const Budget = require('../models/Budget.model');
 const { createWorker } = require('tesseract.js');
 const sharp = require('sharp');
+const transactionService = require('./transaction.service');
 
 // Helper function to parse bill text
 const parseBillText = (text) => {
@@ -49,20 +51,61 @@ const parseBillText = (text) => {
     return result;
 };
 
-const createBill = async ({ userId, billName, amount, dueDate, categoryID, description, type, location, tags, status = "unpaid" }) => {
-    const bill = await Bill.create({
-        user: userId,
-        billName,
-        amount,
-        dueDate,
-        category: categoryID,
-        description,
-        type,
-        location,
-        tags,
-        status
-    });
-    return bill;
+const createBill = async ({ userId, billName, amount, dueDate, budget, description, type, location, status = "unpaid", forceCreate = false }) => {
+    try {
+        console.log('Creating bill with data:', { userId, billName, amount, dueDate, budget, description, type, location, status });
+
+        // Create bill
+        const billData = {
+            user: userId,
+            billName,
+            amount,
+            dueDate,
+            budget,
+            description,
+            type,
+            location,
+            status
+        };
+        
+        // Set force create flag if needed
+        if (forceCreate) {
+            billData._forceCreate = true;
+        }
+        
+        const bill = await Bill.create(billData);
+
+        // Populate budget information
+        await bill.populate({
+            path: 'budget',
+            populate: {
+                path: 'categoryID',
+                model: 'Category'
+            }
+        });
+        
+        console.log('Created bill:', bill);
+
+        return {
+            success: true,
+            bill,
+            budgetDetails: bill.budget ? {
+                spent: bill.budget.spent,
+                total: bill.budget.amount,
+                percentage: (bill.budget.spent / bill.budget.amount) * 100
+            } : null
+        };
+    } catch (error) {
+        console.error('Error in createBill:', error);
+        if (error.name === 'BudgetError') {
+            return {
+                success: false,
+                message: error.message,
+                budgetError: error.budgetDetails
+            };
+        }
+        throw error;
+    }
 };
 
 const getBills = async (userId, filters = {}) => {
@@ -71,37 +114,112 @@ const getBills = async (userId, filters = {}) => {
     // Apply filters
     if (filters.status) query.status = filters.status;
     if (filters.type) query.type = filters.type;
-    if (filters.category) query.category = filters.category;
+    if (filters.budget) query.budget = filters.budget;
     if (filters.startDate && filters.endDate) {
         query.dueDate = {
             $gte: new Date(filters.startDate),
             $lte: new Date(filters.endDate)
         };
     }
-    return await Bill.find(query).populate('category').sort({ dueDate: 1 });
+
+    // Populate budget and its category
+    return await Bill.find(query)
+        .populate({
+            path: 'budget',
+            populate: {
+                path: 'categoryID',
+                model: 'Category'
+            }
+        })
+        .sort({ dueDate: 1 });
 };
 
 const getBillById = async (billID) => {  
     return await Bill.findById(billID).populate('category');
 };
 
-const updateBill = async (billID, { billName, amount, dueDate, categoryID, description, type, location, tags, status }) => {
-    const updateData = {};
-    if (billName) updateData.billName = billName;
-    if (amount) updateData.amount = amount;
-    if (dueDate) updateData.dueDate = dueDate;
-    if (categoryID) updateData.category = categoryID;
-    if (description) updateData.description = description;
-    if (type) updateData.type = type;
-    if (location) updateData.location = location;
-    if (tags) updateData.tags = tags;
-    if (status) updateData.status = status;
+const updateBill = async (billID, { billName, amount, dueDate, budgetId, description, type, location, status }) => {
+    try {
+        const updateData = {};
+        if (billName) updateData.billName = billName;
+        if (amount) updateData.amount = amount;
+        if (dueDate) updateData.dueDate = dueDate;
+        if (budgetId) updateData.budget = budgetId;
+        if (description) updateData.description = description;
+        if (type) updateData.type = type;
+        if (location) updateData.location = location;
+        if (status) updateData.status = status;
 
-    return await Bill.findByIdAndUpdate(billID, updateData, { new: true }).populate('category');
+        const updatedBill = await Bill.findByIdAndUpdate(
+            billID,
+            updateData,
+            { new: true, runValidators: true }
+        ).populate({
+            path: 'budget',
+            populate: {
+                path: 'categoryID',
+                model: 'Category'
+            }
+        });
+
+        if (!updatedBill) {
+            throw new Error('Bill not found');
+        }
+
+        return {
+            bill: updatedBill,
+            budgetDetails: updatedBill.budget ? {
+                spent: updatedBill.budget.spent,
+                total: updatedBill.budget.amount,
+                percentage: (updatedBill.budget.spent / updatedBill.budget.amount) * 100
+            } : null
+        };
+    } catch (error) {
+        if (error.name === 'BudgetError') {
+            return {
+                bill: null,
+                budgetError: error.budgetDetails
+            };
+        }
+        throw error;
+    }
 };
 
 const updateBillStatus = async (billID, status) => {
-    return await Bill.findByIdAndUpdate(billID, { status }, { new: true }).populate('category');
+    try {
+        const bill = await Bill.findById(billID).populate({
+            path: 'budget',
+            populate: {
+                path: 'categoryID',
+                model: 'Category'
+            }
+        });
+        if (!bill) {
+            throw new Error('Bill not found');
+        }
+
+        // If bill is being marked as paid, create a transaction
+        if (status === 'paid' && bill.status !== 'paid') {
+            console.log('Creating transaction for bill:', bill._id);
+            const transaction = await transactionService.createTransaction({
+                user: bill.user,
+                bill: bill._id,
+                amount: bill.amount,
+                type: 'bill_payment',
+                category: bill.budget.categoryID,
+                description: `Payment for ${bill.billName}`,
+                date: bill.dueDate
+            });
+            console.log('Transaction created:', transaction._id);
+        }
+
+        bill.status = status;
+        await bill.save();
+        return bill;
+    } catch (error) {
+        console.error('Error in updateBillStatus:', error);
+        throw error;
+    }
 };
 
 const deleteBill = async (billID) => {
@@ -155,25 +273,31 @@ const getExpenseTrends = async (userId, period = 'month') => {
     const now = new Date();
     let startDate;
 
+    // Clone current date to avoid modifying it
+    const currentDate = new Date(now);
+    
     switch (period) {
         case 'week':
-            startDate = new Date(now.setDate(now.getDate() - 7));
+            // Get start of current day
+            startDate = new Date(currentDate.setHours(0, 0, 0, 0));
+            // Go back 6 days to get a full week including today
+            startDate.setDate(startDate.getDate() - 6);
             break;
         case 'month':
-            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            startDate = new Date(currentDate.setMonth(currentDate.getMonth() - 1));
             break;
         case 'year':
-            startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+            startDate = new Date(currentDate.setFullYear(currentDate.getFullYear() - 1));
             break;
         default:
-            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            startDate = new Date(currentDate.setMonth(currentDate.getMonth() - 1));
     }
 
     const expenses = await Bill.find({
         user: userId,
-        dueDate: { $gte: startDate },
+        dueDate: { $gte: startDate, $lte: new Date() },
         status: 'paid'
-    }).populate('category');
+    }).populate('budget');
 
     const trends = {
         daily: {},
@@ -181,16 +305,41 @@ const getExpenseTrends = async (userId, period = 'month') => {
         monthly: {}
     };
 
+    // Initialize all days in the range with 0
+    let currentDay = new Date(startDate);
+    const endDate = new Date();
+    while (currentDay <= endDate) {
+        const dayKey = currentDay.toISOString().split('T')[0];
+        trends.daily[dayKey] = 0;
+
+        // Initialize week
+        const weekStart = new Date(currentDay);
+        weekStart.setDate(currentDay.getDate() - currentDay.getDay()); // Start of week (Sunday)
+        const weekKey = weekStart.toISOString().split('T')[0];
+        if (!trends.weekly[weekKey]) {
+            trends.weekly[weekKey] = 0;
+        }
+
+        // Move to next day
+        currentDay.setDate(currentDay.getDate() + 1);
+    }
+
+    // Add expense amounts
     expenses.forEach(expense => {
         const date = new Date(expense.dueDate);
         
         // Daily trend
         const dayKey = date.toISOString().split('T')[0];
-        trends.daily[dayKey] = (trends.daily[dayKey] || 0) + expense.amount;
+        trends.daily[dayKey] += expense.amount;
 
-        // Weekly trend
-        const weekKey = `Week ${Math.ceil(date.getDate() / 7)}`;
-        trends.weekly[weekKey] = (trends.weekly[weekKey] || 0) + expense.amount;
+        // Weekly trend - using ISO week
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+        const weekKey = weekStart.toISOString().split('T')[0];
+        if (!trends.weekly[weekKey]) {
+            trends.weekly[weekKey] = 0;
+        }
+        trends.weekly[weekKey] += expense.amount;
 
         // Monthly trend
         const monthKey = date.toLocaleString('default', { month: 'short' });
@@ -256,7 +405,6 @@ const updateScannedBill = async (userId, billId, updates) => {
         if (updates.category) bill.category = updates.category;
         if (updates.description) bill.description = updates.description;
         if (updates.location) bill.location = updates.location;
-        if (updates.tags) bill.tags = updates.tags;
 
         await bill.save();
 

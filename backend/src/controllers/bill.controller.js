@@ -1,27 +1,62 @@
 // controllers/bill.controller.js
-const { billService } = require('../services/bill.service');
+const billService = require('../services/bill.service');
+const userService = require('../services/user.service');
+const transactionService = require('../services/transaction.service');
 const { handleError } = require('../utils/errorHandler');
 
 const createBill = async (req, res) => {
     try {
-        const { billName, amount, dueDate, categoryID, description, type, location, tags } = req.body;
-        const userId = req.user.id;
+        console.log('Request body:', req.body);
+        console.log('Request user:', req.user);
+        
+        const { billName, amount, dueDate, budget, description, type, location, forceCreate} = req.body;
+        const userId = req.user.id || req.user._id; // Get userId from authenticated user
+        
+        console.log('Extracted userId:', userId);
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID not found'
+            });
+        }
+
+        // Validate required fields
+        if (!billName || !amount || !dueDate || !budget) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
 
         const bill = await billService.createBill({
-            userId,
+            userId,  // Pass userId from authenticated user
             billName,
             amount,
             dueDate,
-            categoryID,
+            budget,
             description,
             type,
             location,
-            tags
+            forceCreate: forceCreate === true
         });
+
+        // Check if there was a budget error
+        if (!bill.success) {
+            return res.status(400).json({
+                success: false,
+                message: bill.message || 'Budget error',
+                budgetDetails: bill.budgetError,
+                error: {
+                    type: 'BudgetError',
+                    details: bill.budgetError
+                }
+            });
+        }
 
         res.status(201).json({
             success: true,
-            data: bill,
+            data: bill.bill, // Return just the bill object
+            budgetDetails: bill.budgetDetails,
             message: 'Bill created successfully'
         });
     } catch (error) {
@@ -189,6 +224,19 @@ const updateScannedBill = async (req, res) => {
         const userId = req.user.id;
         const { id } = req.params;
         const updates = req.body;
+        const billId = id;
+        const newBalance = await userService.updateBalance(userId, updates.amount);
+
+        await userService.updateBalance(userId, newBalance);
+
+        await transactionService.createTransaction({
+            user: userId,
+            bill: billId,
+            amount: updates.amount,
+            category: updates.categoryID,
+            description: `Payment for bill: ${updates.billName}`,
+            balanceAfter: newBalance
+        });
 
         const bill = await billService.updateScannedBill(userId, id, updates);
 

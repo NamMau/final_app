@@ -2,7 +2,7 @@
 // export const API_KEY = process.env.REACT_APP_API_KEY || 'super_secret_password';
 //export const API_URL = 'http://192.168.1.8:4000/api';
 //export const API_URL = 'http://192.168.0.105:4000/api';
-export const API_URL = 'http://192.168.1.5:4000/api';
+export const API_URL = 'http://192.168.1.12:4000/api';
 export const API_KEY = 'super_secret_password';
 
 export const ENDPOINTS = {
@@ -19,7 +19,8 @@ export const ENDPOINTS = {
     CHANGE_PASSWORD: '/v1/users/change-password',
     DELETE: (id: string) => `/v1/users/delete-user-by-id/${id}`,
     GET_PROFILE: '/v1/users/profile',
-    UPDATE_PROFILE: '/v1/users/update-profile'
+    UPDATE_PROFILE: '/v1/users/update-profile',
+    UPDATE_BALANCE: '/v1/users/update-balance'
   },
   ACCOUNTS: {
     CREATE_ACCOUNT: '/v1/accounts/create-account',
@@ -67,6 +68,10 @@ export const ENDPOINTS = {
     GET_BY_ID: (id: string) => `/v1/loans/get-loan-by-id/${id}`,
     UPDATE: (id: string) => `/v1/loans/update-loan/${id}`,
     DELETE: (id: string) => `/v1/loans/delete-loan/${id}`,
+  },
+  TRANSACTIONS: {
+    GET_ALL: '/v1/transactions',
+    STATS: '/v1/transactions/stats',
   },
   NOTIFICATIONS: {
     CREATE: '/v1/notifications/create-notification',

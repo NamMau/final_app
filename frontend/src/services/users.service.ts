@@ -30,6 +30,11 @@ export interface UpdateProfileDto {
   status?: 'active' | 'inactive' | 'banned';
 }
 
+interface UpdateBalanceDto {
+  totalBalance: number;
+  currency?: string;
+}
+
 class UserService {
   async getProfile(): Promise<User> {
     try {
@@ -70,6 +75,19 @@ class UserService {
       return response.data.user;
     } catch (error) {
       console.error('Error fetching user by ID:', error);
+      throw error;
+    }
+  }
+
+  async updateBalance(data: UpdateBalanceDto): Promise<User> {
+    try {
+      const response = await apiService.put<User>(ENDPOINTS.USER.UPDATE_BALANCE, data);
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Failed to update balance');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error updating balance:', error);
       throw error;
     }
   }

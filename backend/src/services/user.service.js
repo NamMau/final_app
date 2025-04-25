@@ -109,4 +109,39 @@ exports.changePassword = async (userId, oldPassword, newPassword) => {
     return {success: true, message: "Password changed successfully"};
 };
 
+exports.updateBalance = async (userId, { totalBalance, currency }) => {
+    if (typeof totalBalance !== 'number' || totalBalance < 0) {
+        throw new Error('Invalid balance amount');
+    }
 
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    // Find or create account for user
+    let account = await Account.findOne({ userId });
+    if (!account) {
+        account = new Account({
+            userId,
+            totalBalance: 0,
+            currency: 'VND'
+        });
+    }
+
+    // Update account balance
+    account.totalBalance = totalBalance;
+    if (currency) {
+        account.currency = currency;
+    }
+
+    await account.save();
+
+    // Return combined user and account data
+    const userWithAccount = user.toObject();
+    userWithAccount.totalBalance = account.totalBalance;
+    userWithAccount.currency = account.currency;
+    userWithAccount.accountId = account._id;
+
+    return userWithAccount;
+};

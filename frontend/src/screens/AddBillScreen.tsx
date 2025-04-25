@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,9 +17,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as ImagePicker from 'expo-image-picker';
-import { billsService } from '../services/bills.service';
-import { categoriesService, Category } from '../services/categories.service';
+import { billsService, BillResponse } from '../services/bills.service';
+import { budgetsService, Budget } from '../services/budgets.service';
+import { Category } from '../services/categories.service';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'AddBill'>;
 
@@ -31,33 +30,43 @@ export default function AddBillScreen() {
   const [description, setDescription] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedCategoryName, setSelectedCategoryName] = useState('');
+  const [selectedBudget, setSelectedBudget] = useState('');
+  const [selectedBudgetName, setSelectedBudgetName] = useState('');
   const [location, setLocation] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [budgetDetails, setBudgetDetails] = useState<{
+    spent: number;
+    total: number;
+    percentage: number;
+  } | null>(null);
 
   useEffect(() => {
-    loadCategories();
+    loadBudgets();
   }, []);
 
-  const loadCategories = async () => {
+  const loadBudgets = async () => {
     try {
-      const fetchedCategories = await categoriesService.getCategories();
-      setCategories(fetchedCategories.filter(cat => cat.type === 'expense' || cat.type === 'both'));
+      const fetchedBudgets = await budgetsService.getBudgets();
+      setBudgets(fetchedBudgets.filter(budget => budget.isActive));
     } catch (error) {
-      Alert.alert('Error', 'Failed to load categories');
+      Alert.alert('Error', 'Failed to load budgets');
     }
   };
 
-  const handleCategorySelect = (category: Category) => {
-    setSelectedCategory(category._id);
-    setSelectedCategoryName(category.categoryName);
-    setShowCategoryModal(false);
+  const handleBudgetSelect = (budget: Budget) => {
+    setSelectedBudget(budget._id);
+    const category = budget.categoryID as Category;
+    setSelectedBudgetName(`${budget.name} (${category.categoryName})`);
+    setBudgetDetails({
+      spent: budget.spent,
+      total: budget.amount,
+      percentage: (budget.spent / budget.amount) * 100
+    });
+    setShowBudgetModal(false);
   };
 
   const handleDateChange = (event: any, date?: Date) => {
@@ -76,46 +85,81 @@ export default function AddBillScreen() {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  const handlePickImage = async () => {
+  const createBillWithForce = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 1,
-        base64: true,
-      });
+      setIsLoading(true);
+      const forceResult = await billsService.createBill({
+        billName,
+        amount: Number(amount),
+        dueDate: selectedDate.toISOString(),
+        type: 'manual',
+        budget: selectedBudget,
+        ...(description && { description }),
+        ...(location && { location }),
+        forceCreate: true // Force create bill even if it exceeds budget threshold
+      }) as BillResponse;
 
-      if (!result.canceled && result.assets[0].base64) {
-        setReceiptImage(result.assets[0].uri);
+      if (forceResult.success) {
+        Alert.alert('Success', 'Bill created successfully despite budget threshold');
+        navigation.goBack();
+      } else {
+        Alert.alert('Error', forceResult.message || 'Failed to create bill');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+      Alert.alert('Error', 'Failed to force create bill');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleCreateBill = async () => {
-    if (!billName || !amount || !selectedCategory || !selectedDate) {
-      Alert.alert('Error', 'Please fill in all required fields');
+  const handleSubmit = async () => {
+    if (!billName || !amount || !selectedDate || !selectedBudget) {
+      Alert.alert('Error', 'Please fill all required fields');
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
-      await billsService.createBill({
-        userId: '', // Will be set by backend
-        date: selectedDate,
-        total: parseFloat(amount),
-        items: [],
-        status: 'pending',
-        type: 'expense',
-        categoryId: selectedCategory,
+      const result = await billsService.createBill({
+        billName,
+        amount: Number(amount),
+        dueDate: selectedDate.toISOString(),
+        type: 'manual',
+        budget: selectedBudget,
         ...(description && { description }),
         ...(location && { location }),
-        ...(tags.length > 0 && { tags }),
-        ...(receiptImage && { image: receiptImage }),
-      });
+      }) as BillResponse;
 
-      Alert.alert('Success', 'Bill created successfully');
-      navigation.goBack();
+      if (!result.success && result.budgetDetails) {
+        // Set isLoading to false before showing the alert
+        setIsLoading(false);
+        
+        Alert.alert(
+          'Budget Warning',
+          `Adding this bill will exceed the budget threshold (${result.budgetDetails.threshold}%).
+
+Current spent: ${result.budgetDetails.currentSpent}
+Budget amount: ${result.budgetDetails.budgetAmount}
+New percentage: ${result.budgetDetails.percentage.toFixed(1)}%
+
+Do you want to proceed?`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Proceed',
+              style: 'destructive',
+              onPress: createBillWithForce
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Success', 'Bill created successfully');
+        navigation.goBack();
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to create bill');
     } finally {
@@ -171,12 +215,28 @@ export default function AddBillScreen() {
 
             <TouchableOpacity
               style={styles.input}
-              onPress={() => setShowCategoryModal(true)}
+              onPress={() => setShowBudgetModal(true)}
             >
               <Text style={styles.inputText}>
-                Category: {selectedCategoryName || 'Select Category'}
+                Budget: {selectedBudgetName || 'Select Budget'}
               </Text>
             </TouchableOpacity>
+
+            {budgetDetails && (
+              <View style={styles.budgetInfo}>
+                <Text style={styles.budgetText}>
+                  Budget used: {budgetDetails.spent.toLocaleString()} / {budgetDetails.total.toLocaleString()} ({budgetDetails.percentage.toFixed(1)}%)
+                </Text>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[styles.progressFill, { 
+                      width: `${Math.min(budgetDetails.percentage, 100)}%`,
+                      backgroundColor: budgetDetails.percentage > 80 ? '#FF4444' : '#1F41BB'
+                    }]} 
+                  />
+                </View>
+              </View>
+            )}
 
             <TouchableOpacity
               style={styles.dateButton}
@@ -202,7 +262,7 @@ export default function AddBillScreen() {
               onChangeText={setLocation}
             />
 
-            <View style={styles.tagsContainer}>
+            {/* <View style={styles.tagsContainer}>
               <View style={styles.tagInputContainer}>
                 <TextInput
                   style={[styles.input, styles.tagInput]}
@@ -231,33 +291,11 @@ export default function AddBillScreen() {
                   </View>
                 ))}
               </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.imageButton}
-              onPress={handlePickImage}
-            >
-              <Ionicons name="image-outline" size={24} color="#1F41BB" />
-              <Text style={styles.imageButtonText}>
-                {receiptImage ? 'Change Receipt Image' : 'Add Receipt Image'}
-              </Text>
-            </TouchableOpacity>
-
-            {receiptImage && (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: receiptImage }} style={styles.imagePreview} />
-                <TouchableOpacity
-                  style={styles.removeImageButton}
-                  onPress={() => setReceiptImage(null)}
-                >
-                  <Ionicons name="close-circle" size={24} color="#FF4444" />
-                </TouchableOpacity>
-              </View>
-            )}
+            </View> */}
 
             <TouchableOpacity
               style={styles.createButton}
-              onPress={handleCreateBill}
+              onPress={handleSubmit}
               disabled={isLoading}
             >
               {isLoading ? (
@@ -270,33 +308,50 @@ export default function AddBillScreen() {
         </ScrollView>
       </View>
 
-      {/* Category Selection Modal */}
+      {/* Budget Selection Modal */}
       <Modal
-        visible={showCategoryModal}
+        visible={showBudgetModal}
         animationType="slide"
         transparent={true}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Category</Text>
+            <Text style={styles.modalTitle}>Select Budget</Text>
             <FlatList
-              data={categories}
+              data={budgets}
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.categoryItem}
-                  onPress={() => handleCategorySelect(item)}
+                  style={styles.budgetItem}
+                  onPress={() => handleBudgetSelect(item)}
                 >
-                  <View style={styles.categoryIcon}>
-                    <Ionicons name={'folder-outline'} size={24} color={item.color || '#1F41BB'} />
+                  <View style={styles.budgetInfo}>
+                    <Text style={styles.budgetName}>{item.name}</Text>
+                    <Text style={styles.categoryName}>
+                      {typeof item.categoryID === 'string' 
+                        ? item.categoryID 
+                        : item.categoryID.categoryName}
+                    </Text>
+                    <View style={styles.budgetProgress}>
+                      <Text style={styles.budgetText}>
+                        {item.spent.toLocaleString()} / {item.amount.toLocaleString()} ({((item.spent / item.amount) * 100).toFixed(1)}%)
+                      </Text>
+                      <View style={styles.progressBar}>
+                        <View 
+                          style={[styles.progressFill, { 
+                            width: `${Math.min((item.spent / item.amount) * 100, 100)}%`,
+                            backgroundColor: (item.spent / item.amount) * 100 > 80 ? '#FF4444' : '#1F41BB'
+                          }]} 
+                        />
+                      </View>
+                    </View>
                   </View>
-                  <Text style={styles.modalCategoryName}>{item.categoryName}</Text>
                 </TouchableOpacity>
               )}
             />
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => setShowCategoryModal(false)}
+              onPress={() => setShowBudgetModal(false)}
             >
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
@@ -315,6 +370,45 @@ export default function AddBillScreen() {
 }
 
 const styles = StyleSheet.create({
+  budgetInfo: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+  },
+  budgetText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  budgetItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  budgetName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  categoryName: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  budgetProgress: {
+    marginTop: 8,
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -406,35 +500,7 @@ const styles = StyleSheet.create({
   removeTagButton: {
     padding: 2,
   },
-  imageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  imageButtonText: {
-    fontSize: 16,
-    color: '#1F41BB',
-    marginLeft: 8,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-  },
+
   createButton: {
     backgroundColor: '#1F41BB',
     borderRadius: 8,

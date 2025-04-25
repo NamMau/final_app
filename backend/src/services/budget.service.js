@@ -1,4 +1,64 @@
 const Budget = require("../models/Budget.model");
+const Category = require("../models/Category.model");
+
+class BudgetError extends Error {
+    constructor(message, budgetId, currentSpent, budgetAmount, threshold) {
+        super(message);
+        this.name = 'BudgetError';
+        this.budgetId = budgetId;
+        this.currentSpent = currentSpent;
+        this.budgetAmount = budgetAmount;
+        this.threshold = threshold;
+    }
+}
+
+const updateBudgetSpent = async (categoryId, amount) => {
+    try {
+        // Find active budget for the category
+        const currentDate = new Date();
+        const budget = await Budget.findOne({
+            categoryID: categoryId,
+            startDate: { $lte: currentDate },
+            endDate: { $gte: currentDate },
+            isActive: true
+        });
+
+        if (!budget) {
+            return null;
+        }
+
+        // Calculate new spent amount
+        const newSpent = budget.spent + amount;
+        const spentPercentage = (newSpent / budget.amount) * 100;
+
+        // Check if exceeds threshold
+        if (spentPercentage >= budget.alertThreshold) {
+            throw new BudgetError(
+                'Budget threshold exceeded',
+                budget._id,
+                newSpent,
+                budget.amount,
+                budget.alertThreshold
+            );
+        }
+
+        // Update budget
+        budget.spent = newSpent;
+        await budget.save();
+
+        return {
+            budgetId: budget._id,
+            spent: newSpent,
+            total: budget.amount,
+            percentage: spentPercentage
+        };
+    } catch (error) {
+        if (error instanceof BudgetError) {
+            throw error;
+        }
+        throw new Error('Failed to update budget spent amount');
+    }
+};
 
 const calculateBudgetDates = (period, startDate = new Date(), endDate) => {
     const start = new Date(startDate);

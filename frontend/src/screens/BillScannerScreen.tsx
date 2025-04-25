@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -7,6 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import * as ImagePicker from 'expo-image-picker';
 import { billsService, Bill, BillItem } from '../services/bills.service';
+import { userService } from '../services/users.service';
 
 type BillScannerScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'BillScanner'>;
 
@@ -16,6 +18,34 @@ export default function BillScannerScreen() {
   const [loading, setLoading] = useState(false);
   const [scannedBill, setScannedBill] = useState<Bill | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [loadingBills, setLoadingBills] = useState(false);
+  const [userBalance, setUserBalance] = useState<number>(0);
+
+  useEffect(() => {
+    loadBills();
+    loadUserBalance();
+  }, []);
+
+  const loadBills = async () => {
+    try {
+      setLoadingBills(true);
+      const response = await billsService.getBills();
+      console.log('API Response:', response);
+      if (Array.isArray(response)) {
+        setBills(response);
+        console.log('Bills set:', response);
+      } else {
+        console.error('Invalid response format:', response);
+        setError('Invalid response format');
+      }
+    } catch (err) {
+      console.error('Error loading bills:', err);
+      setError('Failed to load bills');
+    } finally {
+      setLoadingBills(false);
+    }
+  };
 
   const pickImage = async () => {
     try {
@@ -55,7 +85,9 @@ export default function BillScannerScreen() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency: 'VND'
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -64,7 +96,85 @@ export default function BillScannerScreen() {
   };
 
   const handleManualEntry = () => {
-    navigation.navigate('CreateExpense');
+    navigation.navigate('AddBill');
+  };
+
+  const loadUserBalance = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        setUserBalance(user.totalBalance || 0);
+      }
+    } catch (error) {
+      console.error('Error loading user balance:', error);
+    }
+  };
+
+  const handlePayBill = async (bill: Bill) => {
+    if (userBalance < bill.amount) {
+      Alert.alert('Error', 'Insufficient balance to pay this bill');
+      return;
+    }
+
+    Alert.alert(
+      'Confirm Payment',
+      `Are you want to pay ${formatCurrency(bill.amount)} for this bill?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Pay',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              
+              // 1. Update bill status
+              await billsService.updateBillStatus(bill._id, 'paid');
+
+              // 2. Update user balance in both API and AsyncStorage
+              const userData = await AsyncStorage.getItem('user');
+              if (userData) {
+                const user = JSON.parse(userData);
+                const newBalance = (user.totalBalance || 0) - bill.amount;
+
+                // Update balance in API first
+                await userService.updateBalance({
+                  totalBalance: newBalance,
+                });
+
+                // Then update in AsyncStorage
+                user.totalBalance = newBalance;
+                await AsyncStorage.setItem('user', JSON.stringify(user));
+                setUserBalance(newBalance);
+
+                // Notify other screens about balance update
+                navigation.navigate({
+                  name: 'Profile',
+                  params: { balanceUpdated: true }
+                });
+                navigation.navigate({
+                  name: 'Dashboard',
+                  params: { balanceUpdated: true }
+                });
+              }
+
+              // 3. Reload bills
+              loadBills();
+
+              Alert.alert('Success', 'Bill paid successfully');
+            } catch (error) {
+              console.error('Error paying bill:', error);
+              Alert.alert('Error', 'Failed to process payment');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -139,7 +249,7 @@ export default function BillScannerScreen() {
             </View>
           )}
 
-          {scannedBill && (
+          {/* {scannedBill && (
             <View style={styles.resultCard}>
               <Text style={styles.resultTitle}>Scanned Bill Details</Text>
               <Text style={styles.resultDate}>Date: {formatDate(scannedBill.date)}</Text>
@@ -165,6 +275,36 @@ export default function BillScannerScreen() {
               </View>
             </View>
           )}
+
+          {/* Recent Bills */}
+          <View style={styles.recentBillsContainer}>
+            <Text style={styles.sectionTitle}>Recent Bills</Text>
+            {loadingBills ? (
+              <ActivityIndicator size="large" color="#1F41BB" />
+            ) : error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : bills.length === 0 ? (
+              <Text style={styles.emptyText}>No bills found</Text>
+            ) : (
+              bills.map((bill) => (
+                <TouchableOpacity 
+                  key={bill._id} 
+                  style={[styles.billCard, { opacity: bill.status === 'paid' ? 0.6 : 1 }]}
+                  onPress={() => bill.status === 'unpaid' && handlePayBill(bill)}
+                >
+                  <View style={styles.billHeader}>
+                    <Text style={styles.billName}>{bill.billName}</Text>
+                    <Text style={[styles.billStatus, { color: bill.status === 'paid' ? '#4CAF50' : '#FF9800' }]}>
+                      {bill.status.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.billAmount}>{formatCurrency(bill.amount)}</Text>
+                  <Text style={styles.billDate}>{formatDate(new Date(bill.dueDate))}</Text>
+                  {bill.location && <Text style={styles.billLocation}>{bill.location}</Text>}
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -172,6 +312,65 @@ export default function BillScannerScreen() {
 }
 
 const styles = StyleSheet.create({
+  billHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  billStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: '#F5F5F5',
+  },
+  recentBillsContainer: {
+    marginTop: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 16,
+  },
+  billCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  billName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  billDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  billAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F41BB',
+  },
+  billDate: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  billLocation: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#666666',
+    fontSize: 16,
+    marginTop: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: '#1F41BB',

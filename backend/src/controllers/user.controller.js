@@ -102,3 +102,15 @@ exports.changePassword = async (req, res) => {
         res.status(400).json({ success: false, message: error.message });
     }
 };
+
+exports.updateBalance = async (req, res) => {
+    try {
+        const { totalBalance, currency } = req.body;
+        const userId = req.user.id;
+
+        const updatedUser = await userService.updateBalance(userId, { totalBalance, currency });
+        res.status(200).json({ success: true, data: updatedUser });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};

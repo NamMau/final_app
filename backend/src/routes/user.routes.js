@@ -1,5 +1,5 @@
 const express = require("express");
-const { createUser, getUserById, updateUserById, deleteUserById, getAllUsers, getProfile, updateProfile } = require("../controllers/user.controller");
+const { createUser, getUserById, updateUserById, deleteUserById, getAllUsers, getProfile, updateProfile, updateBalance } = require("../controllers/user.controller");
 const { authMiddleware } = require("../middlewares/auth.middleware");
 const { changePassword } = require("../controllers/user.controller");
 
@@ -13,5 +13,6 @@ router.put("/change-password", authMiddleware, changePassword); // change passwo
 router.delete("/delete-user-by-id/:id", authMiddleware, deleteUserById); // delete user
 router.get("/profile", authMiddleware, getProfile);
 router.patch("/update-profile", authMiddleware, updateProfile);
+router.put("/update-balance", authMiddleware, updateBalance);
 
 module.exports = router;
