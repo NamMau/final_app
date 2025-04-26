@@ -17,4 +17,16 @@ export type RootStackParamList = {
   Loan: undefined;
   Profile: { balanceUpdated?: boolean };
   Bills: undefined;
+  FinancialReport: undefined;
+  
+  // New screens for Goals
+  Goal: undefined;
+  GoalDetail: { goalId: string };
+  CreateGoal: undefined;
+  UpdateGoalProgress: { goalId: string };
+  
+  // New screens for Loans
+  LoanDetail: { loanId: string };
+  CreateLoan: undefined;
+  RecordLoanPayment: { loanId: string; paymentIndex: number };
 };

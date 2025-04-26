@@ -1,155 +1,229 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import FloatingActionButton from '../components/FloatingActionButton';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { loanService } from '../services/loan.service';
+import { formatCurrency, formatDate } from '../utils/format';
+import FloatingActionButton from '../components/FloatingActionButton';
 
+// Define the navigation prop type
 type LoanScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Loan'>;
 
+// Loan type definition
 interface LoanItem {
-  id: string;
-  title: string;
-  amount: number;
-  dueDate: string;
+  _id: string;
+  loanName: string;
+  loanAmount: number;
+  remainingBalance: number;
+  interestRate: number;
+  startDate: string;
+  endDate: string;
   monthlyPayment: number;
-  progress: number;
-  estimatedInterest: number;
+  status: 'active' | 'completed' | 'defaulted';
+  paymentSchedule: {
+    dueDate: string;
+    amount: number;
+    isPaid: boolean;
+    paidDate?: string;
+  }[];
+  goalID?: string;
 }
 
-const SAMPLE_LOANS: LoanItem[] = [
-  {
-    id: '1',
-    title: 'Pay Off Debt',
-    amount: 2400,
-    dueDate: 'June 2023',
-    monthlyPayment: 1000,
-    progress: 20,
-    estimatedInterest: 1200,
-  },
-  {
-    id: '2',
-    title: 'Car Loan',
-    amount: 15000,
-    dueDate: 'December 2024',
-    monthlyPayment: 800,
-    progress: 45,
-    estimatedInterest: 2500,
-  },
-];
-
 const LoanScreen = () => {
+  const [loans, setLoans] = useState<LoanItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const navigation = useNavigation<LoanScreenNavigationProp>();
 
-  const renderLoanItem = (item: LoanItem) => (
-    <View key={item.id} style={styles.loanItem}>
-      <View style={styles.loanHeader}>
-        <View style={styles.loanIcon}>
-          <Ionicons name="cash-outline" size={24} color="#1F41BB" />
-        </View>
-        <View style={styles.loanInfo}>
-          <Text style={styles.loanTitle}>{item.title}</Text>
-          <Text style={styles.amountText}>
-            ${item.amount.toFixed(2)}
-          </Text>
-        </View>
-      </View>
+  useEffect(() => {
+    fetchLoans();
+  }, []);
 
-      <View style={styles.loanDetails}>
-        <View style={styles.detailRow}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Your estimated interest</Text>
-            <Text style={styles.detailValue}>You could save ${item.estimatedInterest}</Text>
-          </View>
-          <TouchableOpacity>
-            <Ionicons name="trending-up-outline" size={24} color="#1F41BB" />
-          </TouchableOpacity>
-        </View>
+  const fetchLoans = async () => {
+    try {
+      setIsLoading(true);
+      const response = await loanService.getUserLoans();
+      if (response.success && response.data && response.data.loans) {
+        setLoans(response.data.loans);
+      } else {
+        console.error('Failed to fetch loans:', response.message || 'Unknown error');
+        setLoans([]);
+      }
+    } catch (error) {
+      console.error('Error fetching loans:', error);
+      setLoans([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        <View style={styles.detailRow}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Pay off by</Text>
-            <Text style={styles.detailValue}>{item.dueDate}</Text>
-          </View>
-          <TouchableOpacity>
-            <Ionicons name="calendar-outline" size={24} color="#1F41BB" />
-          </TouchableOpacity>
-        </View>
+  const calculateProgress = (loan: LoanItem): number => {
+    if (loan.loanAmount <= 0) return 0;
+    const progress = (loan.loanAmount - loan.remainingBalance) / loan.loanAmount * 100;
+    return Math.min(Math.round(progress), 100);
+  };
 
-        <View style={styles.detailRow}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Monthly payment</Text>
-            <Text style={styles.detailValue}>${item.monthlyPayment.toFixed(2)}</Text>
-          </View>
-        </View>
+  const handleRecordPayment = (loanId: string) => {
+    navigation.navigate('RecordLoanPayment', { loanId } as any);
+  };
 
-        <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Monitor your progress</Text>
-          <View style={styles.progressBarContainer}>
-            <View 
-              style={[
-                styles.progressBar, 
-                { width: `${item.progress}%` }
-              ]} 
-            />
-          </View>
-          <Text style={styles.progressText}>{item.progress}% paid</Text>
-        </View>
-      </View>
-    </View>
-  );
+  const handleViewLoanDetails = (loanId: string) => {
+    navigation.navigate('LoanDetail', { loanId } as any);
+  };
 
   const handleAddLoan = () => {
-    // Navigate to create loan screen
-    // navigation.navigate('CreateLoan');
+    navigation.navigate('CreateLoan');
+  };
+
+  const handleViewGoal = (goalId?: string) => {
+    if (goalId) {
+      navigation.navigate('GoalDetail', { goalId } as any);
+    }
+  };
+
+  const renderLoanItem = (loan: LoanItem) => {
+    const progress = calculateProgress(loan);
+    const progressBarWidth = `${progress}%`;
+    
+    return (
+      <TouchableOpacity 
+        key={loan._id} 
+        style={styles.loanItem}
+        onPress={() => handleViewLoanDetails(loan._id)}
+      >
+        <View style={styles.loanHeader}>
+          <View style={styles.loanIcon}>
+            <Ionicons name="cash-outline" size={24} color="#1F41BB" />
+          </View>
+          <View style={styles.loanInfo}>
+            <Text style={styles.loanTitle}>{loan.loanName}</Text>
+            <Text style={styles.amountText}>
+              {formatCurrency(loan.loanAmount)}
+            </Text>
+          </View>
+          {loan.status === 'completed' && (
+            <View style={styles.completedBadge}>
+              <Text style={styles.completedText}>Paid</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.loanDetails}>
+          <View style={styles.detailRow}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Your estimated interest</Text>
+              <Text style={styles.detailValue}>
+                You could save {formatCurrency(loan.interestRate * loan.loanAmount / 100)}
+              </Text>
+            </View>
+            <TouchableOpacity>
+              <Ionicons name="trending-up-outline" size={24} color="#1F41BB" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.detailRow}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Pay off by</Text>
+              <Text style={styles.detailValue}>{formatDate(loan.endDate)}</Text>
+            </View>
+            <TouchableOpacity>
+              <Ionicons name="calendar-outline" size={24} color="#1F41BB" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.detailRow}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Monthly payment</Text>
+              <Text style={styles.detailValue}>{formatCurrency(loan.monthlyPayment)}</Text>
+            </View>
+            {loan.status === 'active' && (
+              <TouchableOpacity 
+                style={styles.paymentButton}
+                onPress={() => handleRecordPayment(loan._id)}
+              >
+                <Text style={styles.paymentButtonText}>Record Payment</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.progressSection}>
+            <Text style={styles.progressLabel}>Monitor your progress</Text>
+            <View style={styles.progressBarContainer}>
+              <View 
+                style={[
+                  styles.progressBar, 
+                  { width: progressBarWidth } as any
+                ]} 
+              />
+            </View>
+            <Text style={styles.progressText}>{progress}% paid</Text>
+          </View>
+          
+          {loan.goalID && (
+            <TouchableOpacity 
+              style={styles.viewGoalButton}
+              onPress={() => handleViewGoal(loan.goalID)}
+            >
+              <Ionicons name="flag-outline" size={16} color="#1F41BB" />
+              <Text style={styles.viewGoalText}>View Repayment Goal</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.navigate('Dashboard')}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitle}>Loans</Text>
-            <Text style={styles.headerSubtitle}>Track your loans</Text>
-          </View>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <Image 
-            source={{ uri: 'https://i.pravatar.cc/100' }}
-            style={styles.avatar}
-          />
-        </View>
+        <Text style={styles.headerTitle}>Your Loans</Text>
+        {/* <TouchableOpacity 
+          style={styles.addButton}
+          onPress={handleAddLoan}
+        >
+          <Ionicons name="add-circle-outline" size={24} color="#1F41BB" />
+          <Text style={styles.addButtonText}>Add Loan</Text>
+        </TouchableOpacity> */}
       </View>
 
       {/* Content */}
       <View style={styles.content}>
-        <ScrollView style={styles.scrollView}>
-          {SAMPLE_LOANS.map(renderLoanItem)}
-
-          <View style={styles.createSection}>
-            <Text style={styles.createTitle}>Need a new loan?</Text>
-            <TouchableOpacity style={styles.createButton} onPress={handleAddLoan}>
-              <Text style={styles.createButtonText}>Apply for a loan</Text>
-              <View style={styles.addIconContainer}>
-                <Ionicons name="add" size={24} color="#1F41BB" />
+        {/* Loan List */}
+        {!isLoading && (
+          loans && loans.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="cash-outline" size={64} color="#CCCCCC" />
+              <Text style={styles.emptyTitle}>No Loans Yet</Text>
+              <Text style={styles.emptyText}>
+                You haven't added any loans yet. Add your first loan to start tracking your repayments.
+              </Text>
+              {/* <TouchableOpacity 
+                style={styles.emptyButton}
+                onPress={handleAddLoan}
+              >
+                <Text style={styles.emptyButtonText}>Add Your First Loan</Text>
+              </TouchableOpacity> */}
+            </View>
+          ) : (
+            <ScrollView style={styles.scrollView}>
+              <View style={styles.loansContainer}>
+                {loans && loans.length > 0 ? loans.map((loan) => renderLoanItem(loan)) : null}
               </View>
-            </TouchableOpacity>
+            </ScrollView>
+          )
+        )}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#1F41BB" />
+            <Text style={styles.loadingText}>Loading your loans...</Text>
           </View>
-        </ScrollView>
+        )}
       </View>
 
+      {/* Floating Action Button */}
       <FloatingActionButton onPress={handleAddLoan} />
     </SafeAreaView>
   );
@@ -160,69 +234,93 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1F41BB',
   },
+  content: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
   header: {
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-  },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 32,
     fontWeight: 'bold',
   },
-  headerSubtitle: {
-    color: '#FFFFFF',
-    opacity: 0.8,
-    fontSize: 16,
-    marginTop: 4,
-  },
-  headerRight: {
+  addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 15,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  content: {
-    flex: 1,
+    gap: 8,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: '#1F41BB',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  emptyButton: {
+    backgroundColor: '#1F41BB',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  emptyButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+  },
+  loansContainer: {
+    paddingVertical: 20,
   },
   loanItem: {
-    marginBottom: 24,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 16,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   loanHeader: {
     flexDirection: 'row',
@@ -230,13 +328,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loanIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F4FF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   loanInfo: {
     flex: 1,
@@ -244,51 +342,71 @@ const styles = StyleSheet.create({
   loanTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#333',
     marginBottom: 4,
   },
   amountText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F41BB',
+    fontSize: 16,
+    color: '#666',
+  },
+  completedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
+  },
+  completedText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4CAF50',
   },
   loanDetails: {
-    marginTop: 16,
+    marginTop: 8,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   detailItem: {
     flex: 1,
   },
   detailLabel: {
     fontSize: 14,
-    color: '#666666',
+    color: '#666',
     marginBottom: 4,
   },
   detailValue: {
     fontSize: 16,
-    color: '#000000',
+    color: '#333',
+  },
+  paymentButton: {
+    backgroundColor: '#1F41BB',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  paymentButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '500',
   },
   progressSection: {
-    marginTop: 16,
+    marginTop: 8,
+    marginBottom: 16,
   },
   progressLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 12,
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
   },
   progressBarContainer: {
     height: 8,
     backgroundColor: '#E0E0E0',
     borderRadius: 4,
-    overflow: 'hidden',
     marginBottom: 8,
+    overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
@@ -297,45 +415,24 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#666666',
+    color: '#666',
+    textAlign: 'right',
   },
-  createSection: {
-    marginTop: 24,
-    marginBottom: 100,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-  },
-  createTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 16,
-  },
-  createButton: {
+  viewGoalButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    backgroundColor: '#F0F4FF',
   },
-  createButtonText: {
-    fontSize: 16,
+  viewGoalText: {
+    fontSize: 14,
     color: '#1F41BB',
     fontWeight: '500',
   },
-  addIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F4FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
 });
 
-export default LoanScreen; 
+export default LoanScreen;

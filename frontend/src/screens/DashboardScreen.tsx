@@ -169,14 +169,20 @@ const DashboardScreen = () => {
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('FinancialReport')}
+        >
           <View style={styles.actionIcon}>
-            <Ionicons name="send" size={24} color="#1F41BB" />
+            <Ionicons name="flag-outline" size={24} color="#1F41BB" />
           </View>
-          <Text style={styles.actionText}>Send</Text>
+          <Text style={styles.actionText}>Report</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('Goal', undefined)}
+        >
           <View style={styles.actionIcon}>
             <Ionicons name="trophy-outline" size={24} color="#1F41BB" />
           </View>
@@ -198,7 +204,7 @@ const DashboardScreen = () => {
           <View style={styles.actionIcon}>
             <Ionicons name="receipt-outline" size={24} color="#1F41BB" />
           </View>
-          <Text style={styles.actionText}>Scan Bill</Text>
+          <Text style={styles.actionText}>Bills</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 

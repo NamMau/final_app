@@ -82,3 +82,122 @@ exports.deleteGoal = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// Create a financial goal with automatic milestone generation
+exports.createFinancialGoal = async (req, res) => {
+    try {
+        const { 
+            userId,
+            goalName,
+            targetAmount,
+            startDate,
+            targetDate,
+            type,
+            description,
+            initialAmount
+        } = req.body;
+        
+        const goal = await goalService.createFinancialGoal({
+            userId,
+            goalName,
+            targetAmount,
+            startDate,
+            targetDate,
+            type,
+            description,
+            initialAmount
+        });
+        
+        res.status(201).json({ 
+            success: true, 
+            message: "Financial goal created with milestones",
+            data: { goal } 
+        });
+    } catch (error) {
+        console.error('Error creating financial goal:', error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Update goal progress
+exports.updateGoalProgress = async (req, res) => {
+    try {
+        const { goalId } = req.params;
+        const { 
+            currentAmount,
+            milestoneIndex,
+            isAchieved
+        } = req.body;
+        
+        const goal = await goalService.updateGoalProgress(goalId, {
+            currentAmount,
+            milestoneIndex,
+            isAchieved
+        });
+        
+        res.status(200).json({ 
+            success: true, 
+            message: "Goal progress updated",
+            data: { goal } 
+        });
+    } catch (error) {
+        console.error('Error updating goal progress:', error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Check and update milestone achievements
+exports.checkMilestones = async (req, res) => {
+    try {
+        const { goalId } = req.params;
+        
+        const goal = await goalService.checkMilestones(goalId);
+        
+        res.status(200).json({ 
+            success: true, 
+            message: "Milestones checked",
+            data: { goal } 
+        });
+    } catch (error) {
+        console.error('Error checking milestones:', error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Get goal details with progress
+exports.getGoalDetails = async (req, res) => {
+    try {
+        const { goalId } = req.params;
+        
+        const goal = await goalService.getGoalById(goalId);
+        if (!goal) {
+            return res.status(404).json({ success: false, message: "Goal not found" });
+        }
+        
+        // Calculate progress percentage
+        const progressPercentage = (goal.currentAmount / goal.targetAmount) * 100;
+        
+        // Calculate days remaining
+        const today = new Date();
+        const targetDate = new Date(goal.targetDate);
+        const daysRemaining = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+        
+        // Get upcoming milestones
+        const upcomingMilestones = goal.milestones
+            .filter(milestone => !milestone.isAchieved)
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        res.status(200).json({ 
+            success: true, 
+            data: {
+                goal,
+                progressPercentage,
+                daysRemaining,
+                upcomingMilestones: upcomingMilestones.slice(0, 3) // Return next 3 milestones
+            } 
+        });
+    } catch (error) {
+        console.error('Error getting goal details:', error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+};

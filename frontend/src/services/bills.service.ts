@@ -9,7 +9,8 @@ export interface BillItem {
 
 export interface Category {
   _id: string;
-  name: string;
+  //name: string;
+  categoryName: string;
   type: 'expense' | 'income';
   color?: string;
   icon?: string;
@@ -114,12 +115,13 @@ export const billsService = {
   },
 
   // Get all bills
-  async getBills(params?: {
+  async getBills(filters?: {
     status?: string;
     type?: string;
     category?: string;
     startDate?: string;
     endDate?: string;
+    period?: 'week' | 'month' | 'year';
   }): Promise<Bill[]> {
     try {
       console.log('Calling getBills API...');

@@ -50,6 +50,24 @@ const transactionController = {
                 message: error.message
             });
         }
+    },
+    
+    async getMonthlyStats(req, res) {
+        try {
+            const userId = req.user._id;
+            const { period } = req.query;
+            const stats = await transactionService.getMonthlyStats(userId, period);
+            res.json({
+                success: true,
+                data: stats
+            });
+        } catch (error) {
+            console.error('Error getting monthly stats:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
     }
 };
 

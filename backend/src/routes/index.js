@@ -10,6 +10,7 @@ const goalRoutes = require("./goal.routes");
 const notificationRoutes = require("./notification.routes");
 const accountRoutes = require("./account.routes");
 const transactionRoutes = require("./transaction.routes");
+const financialReportRoutes = require("./financialReport.routes");
 
 const router = express.Router();
 
@@ -24,5 +25,6 @@ router.use("/v1/loans", loanRoutes);
 router.use("/v1/bills", billRoutes);
 router.use("/v1/notifications", notificationRoutes);
 router.use("/v1/transactions", transactionRoutes);
+router.use("/v1/financial-reports", financialReportRoutes);
 
 module.exports = router;

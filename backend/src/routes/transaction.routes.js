@@ -7,5 +7,6 @@ router.use(authMiddleware);
 
 router.get('/', authMiddleware, transactionController.getUserTransactions);
 router.get('/stats', authMiddleware, transactionController.getTransactionStats);
+router.get('/stats/monthly', authMiddleware, transactionController.getMonthlyStats);
 
 module.exports = router;

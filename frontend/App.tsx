@@ -16,6 +16,14 @@ import UpdateBudgetScreen from './src/screens/UpdateBudgetScreen';
 import LoanScreen from './src/screens/LoanScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
+import FinancialReportScreen from './src/screens/FinancialReportScreen';
+import GoalScreen from './src/screens/GoalScreen';
+import GoalDetailScreen from './src/screens/GoalDetailScreen';
+import CreateLoanScreen from './src/screens/CreateLoanScreen';
+import LoanDetailScreen from './src/screens/LoanDetailScreen';
+import RecordLoanPaymentScreen from './src/screens/RecordLoanPaymentScreen';
+import UpdateGoalProgressScreen from './src/screens/UpdateGoalProgressScreen';
+import CreateGoalScreen from './src/screens/CreateGoalScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -63,6 +71,21 @@ export default function App() {
         <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
         <Stack.Screen name="UpdateBudget" component={UpdateBudgetScreen} />
         <Stack.Screen name="Loan" component={LoanScreen} />
+        <Stack.Screen 
+          name="FinancialReport" 
+          component={FinancialReportScreen}
+          options={{
+            title: 'Financial Report',
+            headerShown: false 
+          }}
+        />
+        <Stack.Screen name="Goal" component={GoalScreen} />
+        <Stack.Screen name="GoalDetail" component={GoalDetailScreen} />
+        <Stack.Screen name="CreateGoal" component={CreateGoalScreen} />
+        <Stack.Screen name="CreateLoan" component={CreateLoanScreen} />
+        <Stack.Screen name="LoanDetail" component={LoanDetailScreen} />
+        <Stack.Screen name="RecordLoanPayment" component={RecordLoanPaymentScreen} />
+        <Stack.Screen name="UpdateGoalProgress" component={UpdateGoalProgressScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

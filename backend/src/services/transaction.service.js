@@ -94,53 +94,182 @@ const transactionService = {
 
     async getTransactionStats(userId, period = 'week') {
         try {
-            const userObjectId = new ObjectId(userId);
-            let startDate = new Date();
-            let endDate = new Date(); // Current date
-
-            // Calculate start date based on period
-            if (period === 'week') {
-                // Set start date to 7 days ago from current date
-                startDate.setDate(endDate.getDate() - 6);
-            } else if (period === 'month') {
-                startDate.setMonth(startDate.getMonth() - 1);
-            } else if (period === 'year') {
-                startDate.setFullYear(startDate.getFullYear() - 1);
+            if (!userId) {
+                console.error('No userId provided');
+                return [];
             }
-            
-            // Reset hours to get full days
-            startDate.setHours(0, 0, 0, 0);
-            endDate.setHours(23, 59, 59, 999);
 
-            // Generate array of all dates in range
-            const getDatesInRange = (startDate, endDate) => {
-                const dates = [];
-                const currentDate = new Date(startDate);
-                
-                while (currentDate <= endDate) {
-                    dates.push(new Date(currentDate));
-                    currentDate.setDate(currentDate.getDate() + 1);
-                }
-                
-                return dates;
-            };
+            const today = new Date();
+            let startDate;
 
-            const stats = await Transaction.aggregate([
+            switch (period) {
+                case 'week':
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 7);
+                    break;
+                case 'month':
+                    startDate = new Date(today);
+                    startDate.setMonth(today.getMonth() - 1);
+                    break;
+                case 'year':
+                    startDate = new Date(today);
+                    startDate.setFullYear(today.getFullYear() - 1);
+                    break;
+                default:
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 7);
+            }
+
+            const pipeline = [
                 {
                     $match: {
-                        user: userObjectId,
-                        date: { $gte: startDate, $lte: endDate }
+                        user: new ObjectId(userId),
+                        date: { $gte: startDate, $lte: today }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'categoryDetails'
+                    }
+                },
+                {
+                    $unwind: {
+                        path: '$categoryDetails',
+                        preserveNullAndEmptyArrays: true
                     }
                 },
                 {
                     $group: {
                         _id: {
-                            date: {
-                                $dateToString: {
-                                    format: period === 'week' ? '%Y-%m-%d' : '%Y-%m',
-                                    date: '$date'
-                                }
-                            }
+                            date: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+                            category: '$categoryDetails.categoryName'
+                        },
+                        total: { $sum: '$amount' },
+                        categoryColor: { $first: '$categoryDetails.color' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        date: '$_id.date',
+                        category: '$_id.category',
+                        categoryColor: '$categoryColor',
+                        total: '$total'
+                    }
+                },
+                {
+                    $sort: { date: 1 }
+                }
+            ];
+
+            const stats = await Transaction.aggregate(pipeline);
+            
+            // If no stats found, return empty array
+            if (!stats || stats.length === 0) {
+                return [];
+            }
+
+            // Format the stats to include missing dates
+            const formattedStats = [];
+            const dateMap = new Map();
+
+            // Get all unique dates in the range
+            let currentDate = new Date(startDate);
+            while (currentDate <= today) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                dateMap.set(dateStr, []);
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            // Group stats by date
+            stats.forEach(stat => {
+                const dateStats = dateMap.get(stat.date) || [];
+                dateStats.push(stat);
+                dateMap.set(stat.date, dateStats);
+            });
+
+            // Create formatted stats with all dates
+            dateMap.forEach((dateStats, date) => {
+                formattedStats.push({
+                    date,
+                    total: dateStats.reduce((sum, stat) => sum + stat.total, 0)
+                });
+            });
+
+            return formattedStats.sort((a, b) => new Date(a.date) - new Date(b.date));
+        } catch (error) {
+            console.error('Error getting transaction stats:', error);
+            return [];
+        }
+    },
+    
+    async getMonthlyStats(userId, period = 'month') {
+        try {
+            if (!userId) {
+                console.error('No userId provided for monthly stats');
+                return [];
+            }
+
+            const today = new Date();
+            let startDate;
+            let groupByFormat;
+
+            switch (period) {
+                case 'week':
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 7);
+                    groupByFormat = '%Y-%m-%d'; // Daily for week
+                    break;
+                case 'month':
+                    startDate = new Date(today);
+                    startDate.setMonth(today.getMonth() - 1);
+                    groupByFormat = '%Y-%m-%d'; // Daily for month
+                    break;
+                case 'year':
+                    startDate = new Date(today);
+                    startDate.setFullYear(today.getFullYear() - 1);
+                    groupByFormat = '%Y-%m'; // Monthly for year
+                    break;
+                default:
+                    startDate = new Date(today);
+                    startDate.setMonth(today.getMonth() - 1);
+                    groupByFormat = '%Y-%m-%d';
+            }
+
+            // Get user's balance for income data
+            const user = await User.findById(userId);
+            const userBalance = user ? (user.totalBalance || 0) : 0;
+
+            // Get transactions for expenses
+            const pipeline = [
+                {
+                    $match: {
+                        user: new ObjectId(userId),
+                        date: { $gte: startDate, $lte: today }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'categoryDetails'
+                    }
+                },
+                {
+                    $unwind: {
+                        path: '$categoryDetails',
+                        preserveNullAndEmptyArrays: true
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            date: { $dateToString: { format: groupByFormat, date: '$date' } },
+                            type: '$categoryDetails.type'
                         },
                         total: { $sum: '$amount' }
                     }
@@ -149,42 +278,66 @@ const transactionService = {
                     $project: {
                         _id: 0,
                         date: '$_id.date',
-                        total: 1
-                    }
-                },
-                {
-                    $sort: {
-                        date: 1
+                        type: '$_id.type',
+                        total: '$total'
                     }
                 },
                 {
                     $sort: { date: 1 }
                 }
-            ]);
+            ];
 
-            // Get all dates in range
-            const allDates = getDatesInRange(startDate, endDate);
+            const transactions = await Transaction.aggregate(pipeline);
             
-            // Create a map of existing totals
-            const totalsMap = stats.reduce((acc, stat) => {
-                acc[stat.date] = stat.total;
-                return acc;
-            }, {});
+            // Format the data for the chart
+            const dateMap = new Map();
 
-            // Fill in missing dates with 0
-            const completeStats = allDates.map(date => {
-                const dateStr = date.toISOString().split('T')[0];
-                return {
+            // Get all unique dates in the range
+            let currentDate = new Date(startDate);
+            while (currentDate <= today) {
+                let dateStr;
+                if (period === 'year') {
+                    dateStr = currentDate.toISOString().split('T')[0].substring(0, 7); // YYYY-MM
+                    // Move to next month for year period
+                    currentDate.setMonth(currentDate.getMonth() + 1);
+                } else {
+                    dateStr = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                    // Move to next day for week/month period
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                
+                dateMap.set(dateStr, {
                     date: dateStr,
-                    total: totalsMap[dateStr] || 0
-                };
+                    income: period === 'year' ? userBalance / 12 : userBalance / 30, // Distribute income evenly
+                    expenses: 0
+                });
+            }
+
+            // Add transaction data
+            transactions.forEach(transaction => {
+                if (!dateMap.has(transaction.date)) return;
+                
+                const entry = dateMap.get(transaction.date);
+                
+                if (transaction.type === 'income') {
+                    entry.income += transaction.total;
+                } else {
+                    entry.expenses += transaction.total;
+                }
+                
+                dateMap.set(transaction.date, entry);
             });
 
-            return completeStats;
+            // Convert to array and sort by date
+            const result = Array.from(dateMap.values())
+                .sort((a, b) => a.date.localeCompare(b.date));
+
+            return result;
         } catch (error) {
-            throw error;
+            console.error('Error getting monthly stats:', error);
+            return [];
         }
     }
-};
+}
 
 module.exports = transactionService;

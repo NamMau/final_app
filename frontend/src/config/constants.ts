@@ -58,20 +58,34 @@ export const ENDPOINTS = {
   },
   GOALS: {
     CREATE: '/v1/goals/create-goal',
+    CREATE_FINANCIAL_GOAL: '/v1/goals/create-financial-goal',
     GET_ALL: '/v1/goals/get-user-goals/${userId}',
+    GET_DETAILS: '/v1/goals/details/${goalId}',
+    UPDATE_PROGRESS: '/v1/goals/update-progress/${goalId}',
+    CHECK_MILESTONES: '/v1/goals/check-milestones/${goalId}',
     COMPLETE: (id: string) => `/v1/goals/complete-goal/${id}`,
     DELETE: (id: string) => `/v1/goals/delete-goal/${id}`,
   },
   LOANS: {
     CREATE: '/v1/loans/create-loan',
+    CREATE_WITH_GOAL: '/v1/loans/create-with-goal',
+    GENERATE_SCHEDULE: '/v1/loans/payment-schedule',
     GET_ALL: '/v1/loans/get-user-loans/${userID}',
+    GET_DETAILS: '/v1/loans/get-loan-by-id/${loanID}',
+    RECORD_PAYMENT: '/v1/loans/record-payment/${loanID}',
     GET_BY_ID: (id: string) => `/v1/loans/get-loan-by-id/${id}`,
     UPDATE: (id: string) => `/v1/loans/update-loan/${id}`,
     DELETE: (id: string) => `/v1/loans/delete-loan/${id}`,
   },
   TRANSACTIONS: {
+    BASE: '/v1/transactions',
     GET_ALL: '/v1/transactions',
-    STATS: '/v1/transactions/stats',
+    CREATE: '/v1/transactions',
+    STATS: '/v1/transactions/stats'
+  },
+  FINANCIAL_REPORTS: {
+    BASE: '/v1/financial-reports',
+    GENERATE: '/v1/financial-reports/generate'
   },
   NOTIFICATIONS: {
     CREATE: '/v1/notifications/create-notification',
