@@ -29,7 +29,15 @@ exports.createGoal = async ({
 };
 
 exports.getUserGoals = async (userId, filters = {}) => {
-    const query = { user: userId };
+    console.log('Getting goals for userId:', userId);
+    
+    // Tìm kiếm goals bằng cả user và userId để đảm bảo tương thích với cả dữ liệu cũ và mới
+    const query = { 
+        $or: [
+            { user: userId },
+            { userId: userId }
+        ]
+    };
     
     // Apply filters
     if (filters.type) query.type = filters.type;
@@ -41,8 +49,10 @@ exports.getUserGoals = async (userId, filters = {}) => {
         };
     }
 
-    return await Goal.find(query)
-        .sort({ targetDate: 1 });
+    console.log('Query for goals:', JSON.stringify(query));
+    const goals = await Goal.find(query).sort({ targetDate: 1 });
+    console.log('Found goals:', goals.length);
+    return goals;
 };
 
 exports.updateGoal = async (goalID, {
@@ -74,6 +84,23 @@ exports.deleteGoal = async (goalID) => {
     return await Goal.findByIdAndDelete(goalID);
 };
 
+// Get goal by ID
+exports.getGoalById = async (goalId) => {
+    try {
+        console.log('Getting goal by ID:', goalId);
+        const goal = await Goal.findById(goalId);
+        if (!goal) {
+            console.log('Goal not found with ID:', goalId);
+            return null;
+        }
+        console.log('Found goal:', goal.goalName);
+        return goal;
+    } catch (error) {
+        console.error('Error getting goal by ID:', error);
+        throw error;
+    }
+};
+
 // Update goal progress
 exports.updateGoalProgress = async (goalId, { currentAmount, milestoneIndex, isAchieved }) => {
   try {
@@ -92,22 +119,54 @@ exports.updateGoalProgress = async (goalId, { currentAmount, milestoneIndex, isA
       goal.milestones[milestoneIndex].isAchieved = isAchieved || false;
     }
     
+    // Lấy ngày hiện tại và ngày mục tiêu
+    const today = new Date();
+    const targetDate = new Date(goal.targetDate);
+    
     // Check if goal is completed
     const progressPercentage = (goal.currentAmount / goal.targetAmount) * 100;
+    
+    // Kiểm tra xem goal đã hoàn thành hay thất bại
+    const notificationService = require('./notification.service');
+    
+    // Đảm bảo có userId hợp lệ
+    const userId = goal.userId || goal.user;
+    if (!userId) {
+      console.warn('No valid userId found for goal:', goalId);
+      throw new Error('No valid userId found for goal');
+    }
+    
+    // Nếu đạt 100% tiến độ và chưa được đánh dấu là hoàn thành
     if (progressPercentage >= 100 && goal.status !== 'completed') {
       goal.status = 'completed';
       
-      // Create a congratulatory notification
-      const notificationService = require('./notification.service');
+      // Tạo thông báo chúc mừng với type hợp lệ
       await notificationService.createNotification({
-        userId: goal.userId,
-        title: 'Financial Goal Achieved!',
+        userId: userId,
         message: `Congratulations! You've reached your goal: ${goal.goalName}`,
-        type: 'achievement',
-        isRead: false
+        type: 'goal_achieved', // Sử dụng giá trị enum hợp lệ
+        priority: 'high',
+        status: 'unread',
+        link: `/goals/${goal._id}`
       });
-    } else if (progressPercentage < 100 && goal.status === 'completed') {
-      // If the goal was previously marked as completed but is no longer
+    } 
+    // Nếu đã quá hạn mà chưa hoàn thành và chưa được đánh dấu là thất bại
+    else if (targetDate < today && progressPercentage < 100 && goal.status !== 'failed') {
+      goal.status = 'failed';
+      
+      // Tạo thông báo thất bại
+      await notificationService.createNotification({
+        userId: userId,
+        message: `Your goal "${goal.goalName}" has passed its deadline without completion.`,
+        type: 'system', // Sử dụng giá trị enum hợp lệ
+        priority: 'medium',
+        status: 'unread',
+        link: `/goals/${goal._id}`
+      });
+    }
+    // Nếu tiến độ < 100% và trước đây đã đánh dấu là hoàn thành
+    else if (progressPercentage < 100 && goal.status === 'completed') {
+      // Nếu goal đã được đánh dấu là hoàn thành nhưng không còn nữa
       goal.status = 'active';
     }
     
@@ -129,6 +188,14 @@ exports.checkMilestones = async (goalId) => {
     
     let updated = false;
     const today = new Date();
+    const notificationService = require('./notification.service');
+    
+    // Đảm bảo có userId hợp lệ
+    const userId = goal.userId || goal.user;
+    if (!userId) {
+      console.warn('No valid userId found for goal:', goalId);
+      return null;
+    }
     
     // Check each milestone
     for (let i = 0; i < goal.milestones.length; i++) {
@@ -139,15 +206,31 @@ exports.checkMilestones = async (goalId) => {
         milestone.isAchieved = true;
         updated = true;
         
-        // Create a notification for milestone achievement
-        const notificationService = require('./notification.service');
+        // Tạo thông báo đạt milestone với type hợp lệ
         await notificationService.createNotification({
-          userId: goal.userId,
-          title: 'Milestone Achieved!',
-          message: `You've reached a milestone for your goal: ${goal.goalName}`,
-          type: 'milestone',
-          isRead: false
+          userId: userId,
+          message: `You've reached a milestone for your goal "${goal.goalName}": ${milestone.description || `Milestone ${i + 1}`}`,
+          type: 'goal_achieved', // Sử dụng giá trị enum hợp lệ
+          priority: 'medium',
+          status: 'unread',
+          link: `/goals/${goal._id}`
         });
+      }
+      
+      // Nếu milestone đã quá hạn mà chưa đạt được, tạo thông báo nhắc nhở
+      else if (!milestone.isAchieved && new Date(milestone.date) < today && goal.currentAmount < milestone.amount) {
+        // Chỉ tạo thông báo nếu milestone chưa quá hạn quá 7 ngày
+        const daysPassed = Math.floor((today - new Date(milestone.date)) / (1000 * 60 * 60 * 24));
+        if (daysPassed <= 7) {
+          await notificationService.createNotification({
+            userId: userId,
+            message: `A milestone for your goal "${goal.goalName}" has passed its due date. Keep pushing!`,
+            type: 'system', // Sử dụng giá trị enum hợp lệ
+            priority: 'low',
+            status: 'unread',
+            link: `/goals/${goal._id}`
+          });
+        }
       }
     }
     

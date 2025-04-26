@@ -37,7 +37,23 @@ interface Loan {
 const RecordLoanPaymentScreen = () => {
   const navigation = useNavigation<RecordLoanPaymentScreenNavigationProp>();
   const route = useRoute<RecordLoanPaymentScreenRouteProp>();
-  const { loanId, paymentIndex } = route.params;
+  const { loanId } = route.params;
+  
+  // Đảm bảo paymentIndex luôn là số và có giá trị mặc định là 0
+  // Nếu route.params.paymentIndex không tồn tại hoặc undefined, sử dụng 0
+  const paymentIndex = typeof route.params.paymentIndex === 'number' 
+    ? route.params.paymentIndex 
+    : (route.params.paymentIndex !== undefined 
+        ? parseInt(route.params.paymentIndex as string, 10) 
+        : 0);
+  
+  // Log để debug
+  console.log('RecordLoanPaymentScreen - Received params:', { 
+    loanId, 
+    paymentIndex,
+    rawPaymentIndex: route.params.paymentIndex,
+    paymentIndexType: typeof route.params.paymentIndex
+  });
   
   const [loan, setLoan] = useState<Loan | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -55,14 +71,41 @@ const RecordLoanPaymentScreen = () => {
     try {
       setLoading(true);
       const response = await loanService.getLoanDetails(loanId);
+      console.log('Loan details response in RecordLoanPaymentScreen:', response);
       
       if (response.success && response.data && response.data.loan) {
         setLoan(response.data.loan);
         
+        // Kiểm tra paymentSchedule tồn tại
+        if (!response.data.loan.paymentSchedule || response.data.loan.paymentSchedule.length === 0) {
+          console.error('No payment schedule found for loan:', loanId);
+          setError('This loan has no payment schedule');
+          return;
+        }
+        
+        // Đảm bảo paymentIndex nằm trong phạm vi hợp lệ
+        const scheduleLength = response.data.loan.paymentSchedule.length;
+        let validIndex = paymentIndex;
+        
+        if (isNaN(validIndex) || validIndex < 0 || validIndex >= scheduleLength) {
+          console.warn(`Invalid payment index: ${paymentIndex}, defaulting to first unpaid payment`);
+          
+          // Tìm khoản thanh toán đầu tiên chưa trả
+          validIndex = response.data.loan.paymentSchedule.findIndex(p => !p.isPaid);
+          
+          // Nếu không tìm thấy khoản thanh toán chưa trả, sử dụng khoản đầu tiên
+          if (validIndex === -1) validIndex = 0;
+          
+          console.log(`Using payment index: ${validIndex} instead`);
+        }
+        
         // Pre-fill payment amount from schedule
-        if (response.data.loan.paymentSchedule && 
-            response.data.loan.paymentSchedule[paymentIndex]) {
-          setPaymentAmount(response.data.loan.paymentSchedule[paymentIndex].amount.toString());
+        if (response.data.loan.paymentSchedule[validIndex]) {
+          setPaymentAmount(response.data.loan.paymentSchedule[validIndex].amount.toString());
+          console.log('Found payment schedule item:', response.data.loan.paymentSchedule[validIndex]);
+        } else {
+          console.error('Payment schedule or index not found:', validIndex, 'Schedule length:', response.data.loan.paymentSchedule?.length);
+          setError(`Payment #${validIndex + 1} not found in schedule`);
         }
       } else {
         setError('Failed to load loan details');
@@ -175,7 +218,32 @@ const RecordLoanPaymentScreen = () => {
     );
   }
 
-  const scheduledPayment = loan.paymentSchedule[paymentIndex];
+  if (loan && (!loan.paymentSchedule || !loan.paymentSchedule[paymentIndex])) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Record Payment</Text>
+        </View>
+        <View style={styles.content}>
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={48} color="#F44336" />
+            <Text style={styles.errorText}>Payment #{paymentIndex + 1} not found in schedule</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Text style={styles.retryButtonText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const scheduledPayment = loan?.paymentSchedule?.[paymentIndex];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -195,7 +263,7 @@ const RecordLoanPaymentScreen = () => {
             <View style={styles.loanInfoSection}>
               <Text style={styles.loanName}>{loan.loanName}</Text>
               <Text style={styles.paymentLabel}>
-                Payment #{paymentIndex + 1} - Due: {formatDate(scheduledPayment.dueDate)}
+                Payment #{paymentIndex + 1} {scheduledPayment?.dueDate ? `- Due: ${formatDate(scheduledPayment.dueDate)}` : ''}
               </Text>
             </View>
 
@@ -209,7 +277,7 @@ const RecordLoanPaymentScreen = () => {
                 keyboardType="numeric"
               />
               <Text style={styles.helperText}>
-                Scheduled amount: {formatCurrency(scheduledPayment.amount)}
+                Scheduled amount: {formatCurrency(scheduledPayment?.amount || 0)}
               </Text>
             </View>
 

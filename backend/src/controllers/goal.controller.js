@@ -177,10 +177,14 @@ exports.getGoalDetails = async (req, res) => {
         // Calculate progress percentage
         const progressPercentage = (goal.currentAmount / goal.targetAmount) * 100;
         
-        // Calculate days remaining
+        // Calculate days remaining - sửa cách tính để chính xác hơn
         const today = new Date();
         const targetDate = new Date(goal.targetDate);
-        const daysRemaining = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+        
+        // Nếu targetDate đã qua, days remaining = 0
+        const daysRemaining = targetDate > today 
+            ? Math.max(0, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)))
+            : 0;
         
         // Get upcoming milestones
         const upcomingMilestones = goal.milestones

@@ -13,9 +13,21 @@ exports.createLoan = async ({
     remainingBalance,
     status = "active"
 }) => {
+    console.log('Creating loan with data:', { userId, goalID, loanName, loanAmount });
+    
+    if (!userId) {
+        console.error('Missing required userId for loan');
+        throw new Error('userId is required for loan');
+    }
+    
+    if (!goalID) {
+        console.error('Missing required goalID for loan');
+        throw new Error('goalID is required for loan');
+    }
+    
     return await Loan.create({
-        user: userId,
-        goal: goalID,
+        userId: userId, 
+        goalID: goalID, 
         loanName,
         loanAmount,
         interestRate,
@@ -29,11 +41,20 @@ exports.createLoan = async ({
 };
 
 exports.getUserLoans = async (userId, filters = {}) => {
-    const query = { user: userId };
+    // Tìm kiếm với cả user và userId để tương thích với dữ liệu cũ và mới
+    const query = { 
+        $or: [
+            { user: userId },
+            { userId: userId }
+        ]
+    };
     
     // Apply filters
     if (filters.status) query.status = filters.status;
-    if (filters.goal) query.goal = filters.goal;
+    if (filters.goal) {
+        query.$or[0].goal = filters.goal;
+        query.$or[1].goalID = filters.goal;
+    }
     if (filters.startDate && filters.endDate) {
         query.startDate = {
             $gte: new Date(filters.startDate),
@@ -41,9 +62,14 @@ exports.getUserLoans = async (userId, filters = {}) => {
         };
     }
 
-    return await Loan.find(query)
-        .populate('goal')
+    console.log('Finding loans with query:', JSON.stringify(query));
+    
+    const loans = await Loan.find(query)
+        .populate('goalID')  // Populate goalID field
         .sort({ startDate: -1 });
+        
+    console.log(`Found ${loans.length} loans for user ${userId}`);
+    return loans;
 };
 
 exports.updateLoan = async (loanID, {
@@ -73,6 +99,34 @@ exports.updateLoan = async (loanID, {
 
 exports.deleteLoan = async (loanID) => {
     return await Loan.findByIdAndDelete(loanID);
+};
+
+// Get loan by ID
+exports.getLoanById = async (loanId) => {
+    console.log('Service: Getting loan by ID:', loanId);
+    try {
+        const loan = await Loan.findById(loanId);
+        if (!loan) {
+            console.log('Loan not found with ID:', loanId);
+            return null;
+        }
+        
+        // Populate goal information if available
+        if (loan.goalID) {
+            try {
+                await loan.populate('goalID');
+            } catch (error) {
+                console.error('Error populating goal:', error);
+                // Không throw error, chỉ log
+            }
+        }
+        
+        console.log('Loan found:', loan._id);
+        return loan;
+    } catch (error) {
+        console.error('Error in getLoanById service:', error);
+        throw error;
+    }
 };
 
 // Generate a payment schedule for a loan
@@ -224,11 +278,12 @@ exports.recordLoanPayment = async (loanId, paymentIndex, paymentAmount, paymentD
       // Create a congratulatory notification
       const notificationService = require('./notification.service');
       await notificationService.createNotification({
-        userId: loan.user,
-        title: 'Loan Repayment Complete!',
+        userId: loan.userId, // Sửa: Sử dụng loan.userId thay vì loan.user
         message: `Congratulations! You've successfully paid off your loan: ${loan.loanName}`,
-        type: 'achievement',
-        isRead: false
+        type: 'loan_payment', // Sửa: Sử dụng giá trị enum hợp lệ từ Notification model
+        priority: 'high',
+        status: 'unread',
+        link: `Loan/${loan._id}`
       });
     }
     

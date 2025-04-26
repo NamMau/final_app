@@ -12,8 +12,47 @@ exports.createLoan = async (req, res) => {
             startDate,
             endDate,
             monthlyPayment,
-            paymentSchedule 
+            paymentSchedule,
+            remainingBalance,
+            status
         } = req.body;
+        
+        console.log('Controller received loan data:', req.body);
+        
+        // Nếu không có remainingBalance, sử dụng loanAmount
+        const actualRemainingBalance = remainingBalance || loanAmount;
+        
+        // Tạo lịch thanh toán tự động nếu không có
+        let actualPaymentSchedule = paymentSchedule;
+        if (!actualPaymentSchedule || !Array.isArray(actualPaymentSchedule) || actualPaymentSchedule.length === 0) {
+            console.log('Generating payment schedule automatically');
+            
+            const startDateObj = new Date(startDate);
+            const endDateObj = new Date(endDate);
+            
+            // Tính số tháng giữa startDate và endDate
+            const monthDiff = (endDateObj.getFullYear() - startDateObj.getFullYear()) * 12 + 
+                              (endDateObj.getMonth() - startDateObj.getMonth());
+            
+            const numPayments = Math.max(1, monthDiff);
+            const actualMonthlyPayment = monthlyPayment || (loanAmount / numPayments);
+            
+            actualPaymentSchedule = [];
+            
+            // Tạo lịch thanh toán hàng tháng
+            for (let i = 0; i < numPayments; i++) {
+                const dueDate = new Date(startDateObj);
+                dueDate.setMonth(dueDate.getMonth() + i + 1); // +1 vì kỳ thanh toán đầu tiên là 1 tháng sau startDate
+                
+                actualPaymentSchedule.push({
+                    dueDate,
+                    amount: actualMonthlyPayment,
+                    isPaid: false
+                });
+            }
+            
+            console.log(`Generated ${actualPaymentSchedule.length} payment schedule items`);
+        }
         
         const loan = await loanService.createLoan({
             userId,
@@ -24,11 +63,14 @@ exports.createLoan = async (req, res) => {
             startDate,
             endDate,
             monthlyPayment,
-            paymentSchedule
+            paymentSchedule: actualPaymentSchedule,
+            remainingBalance: actualRemainingBalance,
+            status
         });
         
         res.status(201).json({ success: true, data: loan });
     } catch (error) {
+        console.error('Error in createLoan controller:', error);
         res.status(400).json({ success: false, message: error.message });
     }
 };
@@ -177,5 +219,46 @@ exports.recordLoanPayment = async (req, res) => {
     } catch (error) {
         console.error('Error recording loan payment:', error);
         res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Get loan by ID
+exports.getLoanById = async (req, res) => {
+    try {
+        const { loanId } = req.params;
+        console.log('Getting loan by ID:', loanId);
+        
+        if (!loanId) {
+            return res.status(400).json({ success: false, message: 'Loan ID is required' });
+        }
+        
+        const loan = await loanService.getLoanById(loanId);
+        
+        if (!loan) {
+            return res.status(404).json({ success: false, message: 'Loan not found' });
+        }
+        
+        // Lấy thông tin goal liên quan nếu có
+        let goal = null;
+        if (loan.goalID) {
+            try {
+                const goalService = require('../services/goal.service');
+                goal = await goalService.getGoalById(loan.goalID);
+            } catch (error) {
+                console.error('Error fetching related goal:', error);
+                // Không throw error, chỉ log
+            }
+        }
+        
+        res.status(200).json({ 
+            success: true, 
+            data: { 
+                loan,
+                goal
+            } 
+        });
+    } catch (error) {
+        console.error('Error in getLoanById controller:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };

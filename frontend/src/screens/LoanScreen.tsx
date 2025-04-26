@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -77,10 +77,28 @@ const LoanScreen = () => {
     navigation.navigate('CreateLoan');
   };
 
-  const handleViewGoal = (goalId?: string) => {
-    if (goalId) {
-      navigation.navigate('GoalDetail', { goalId } as any);
+  const handleViewGoal = (goalId?: string | any) => {
+    if (!goalId) return;
+  
+    // Kiểm tra nếu goalId là một object (đã được populate từ backend)
+    let goalIdString: string;
+  
+    if (typeof goalId === 'object' && goalId !== null) {
+      // Nếu là object và có _id, sử dụng _id
+      if (goalId._id) {
+        goalIdString = goalId._id;
+      } else {
+        console.error('Invalid goalID object:', goalId);
+        Alert.alert('Error', 'Cannot view goal details: Invalid goal ID');
+        return;
+      }
+    } else {
+      // Nếu là string, sử dụng trực tiếp
+      goalIdString = goalId as string;
     }
+  
+    console.log('Navigating to GoalDetail with goalId:', goalIdString);
+    navigation.navigate('GoalDetail', { goalId: goalIdString });
   };
 
   const renderLoanItem = (loan: LoanItem) => {

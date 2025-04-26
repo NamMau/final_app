@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions, Modal, FlatList, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { transactionsService, TransactionStats } from '../services/transactions.service';
 import { BarChart } from 'react-native-chart-kit';
+import notificationService, { Notification } from '../services/notification.service';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 
@@ -63,6 +64,9 @@ const DashboardScreen = () => {
   const [stats, setStats] = useState<TransactionStats[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('month');
   const [totalSpent, setTotalSpent] = useState<number>(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [showNotifications, setShowNotifications] = useState<boolean>(false);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -85,6 +89,51 @@ const DashboardScreen = () => {
     }
   };
 
+  // Load notifications
+  const loadNotifications = async () => {
+    try {
+      const response = await notificationService.getUserNotifications();
+      console.log('Notifications response:', response);
+      if (response.success && response.data?.notifications) {
+        setNotifications(response.data.notifications);
+        const unread = response.data.notifications.filter(n => n.status === 'unread').length;
+        setUnreadCount(unread);
+      }
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  // Mark notification as read
+  const handleNotificationPress = async (notification: Notification) => {
+    try {
+      if (notification.status === 'unread') {
+        await notificationService.markAsRead(notification._id);
+        loadNotifications(); // Reload to update unread count
+      }
+      
+      // Navigate to the linked screen if available
+      if (notification.link) {
+        setShowNotifications(false);
+        const parts = notification.link.split('/');
+        const screenName = parts[0];
+        const params = parts.length > 1 ? { id: parts[1] } : undefined;
+        
+        // Handle navigation based on the link format
+        if (screenName === 'Goal' && params?.id) {
+          navigation.navigate('GoalDetail', { goalId: params.id });
+        } else if (screenName === 'Loan' && params?.id) {
+          navigation.navigate('LoanDetail', { loanId: params.id });
+        } else if (screenName) {
+          // @ts-ignore - Dynamic navigation
+          navigation.navigate(screenName, params);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling notification:', error);
+    }
+  };
+
   // Load balance and stats when screen is focused
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -100,6 +149,7 @@ const DashboardScreen = () => {
         }
       };
       fetchStats();
+      loadNotifications(); // Reload notifications on focus
     });
 
     return unsubscribe;
@@ -108,6 +158,7 @@ const DashboardScreen = () => {
   // Initial load
   useEffect(() => {
     loadBalance();
+    loadNotifications();
     const fetchStats = async () => {
       try {
         const data = await transactionsService.getTransactionStats(selectedPeriod);
@@ -157,8 +208,16 @@ const DashboardScreen = () => {
           <Text style={styles.balanceAmount}>{formatCurrency(balance)}</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.notificationButton}>
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => setShowNotifications(true)}
+          >
             <Ionicons name="notifications-outline" size={24} color="#FFF" />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationCount}>{unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <Image 
             source={{ uri: 'https://i.pravatar.cc/100' }}
@@ -281,6 +340,68 @@ const DashboardScreen = () => {
         </View>
       </ScrollView>
 
+      {/* Notifications Modal */}
+      <Modal
+        visible={showNotifications}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowNotifications(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.notificationModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            {notifications.length > 0 ? (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item._id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={[
+                      styles.notificationItem, 
+                      item.status === 'unread' && styles.unreadNotification
+                    ]}
+                    onPress={() => handleNotificationPress(item)}
+                  >
+                    <View style={styles.notificationIcon}>
+                      {item.type === 'goal_achieved' && <Ionicons name="trophy" size={24} color="#1F41BB" />}
+                      {item.type === 'budget_alert' && <Ionicons name="alert-circle" size={24} color="#FF6B6B" />}
+                      {item.type === 'bill_due' && <Ionicons name="calendar" size={24} color="#FFB100" />}
+                      {item.type === 'loan_payment' && <Ionicons name="cash" size={24} color="#4CAF50" />}
+                      {item.type === 'system' && <Ionicons name="information-circle" size={24} color="#666" />}
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={[
+                        styles.notificationMessage,
+                        item.status === 'unread' && styles.unreadText
+                      ]}>
+                        {item.message}
+                      </Text>
+                      <Text style={styles.notificationTime}>
+                        {new Date(item.createdAt).toLocaleString()}
+                      </Text>
+                    </View>
+                    {item.priority === 'high' && (
+                      <View style={styles.priorityIndicator} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <View style={styles.emptyNotifications}>
+                <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No notifications yet</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={[styles.navButton, styles.navButtonActive]}>
@@ -396,9 +517,27 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 10,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationCount: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   avatar: {
     width: 40,
@@ -456,6 +595,78 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4CAF50',
     marginBottom: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  notificationModal: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 30,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+    alignItems: 'center',
+  },
+  unreadNotification: {
+    backgroundColor: 'rgba(31, 65, 187, 0.05)',
+  },
+  notificationIcon: {
+    marginRight: 12,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  unreadText: {
+    fontWeight: 'bold',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#999',
+  },
+  priorityIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF6B6B',
+    marginLeft: 8,
+  },
+  emptyNotifications: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
   },
   bottomNav: {
     flexDirection: 'row',

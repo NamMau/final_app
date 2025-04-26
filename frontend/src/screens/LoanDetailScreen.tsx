@@ -89,7 +89,27 @@ const LoanDetailScreen = () => {
           // Load associated goal if exists
           if (response.data.loan.goalID) {
             try {
-              const goalResponse = await goalService.getGoalDetails(response.data.loan.goalID);
+              // Đảm bảo goalID là string
+              let goalId: string;
+              
+              // Kiểm tra nếu goalID là object với _id
+              if (typeof response.data.loan.goalID === 'object' && response.data.loan.goalID !== null) {
+                // Sử dụng type assertion để truy cập _id
+                const goalObject = response.data.loan.goalID as { _id?: string };
+                if (goalObject._id) {
+                  goalId = goalObject._id;
+                } else {
+                  console.error('Invalid goalID object structure:', response.data.loan.goalID);
+                  return; // Không tiếp tục nếu không có _id
+                }
+              } else {
+                // Nếu goalID là string, sử dụng trực tiếp
+                goalId = response.data.loan.goalID as string;
+              }
+              
+              console.log('Loading goal details for goalId:', goalId);
+              const goalResponse = await goalService.getGoalDetails(goalId);
+              
               if (goalResponse.success && goalResponse.data && goalResponse.data.goal) {
                 setGoal(goalResponse.data.goal);
               }

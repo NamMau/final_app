@@ -8,8 +8,15 @@ exports.createNotification = async ({
     link,
     status = "unread"
 }) => {
+    console.log('Creating notification with data:', { userId, message, type, priority, status, link });
+    
+    if (!userId) {
+        console.error('Missing required userId for notification');
+        throw new Error('userId is required for notification');
+    }
+    
     return await Notification.create({
-        user: userId,
+        userId: userId,
         message,
         type,
         priority,

@@ -47,13 +47,36 @@ class LoanService {
       const params: Record<string, string> = {};
       if (status) params.status = status;
       
-      const response = await apiService.get<LoanResponse>(endpoint, params);
-      return response.data || { success: false, data: {}, message: 'No data returned' };
+      console.log('Making GET request to:', `${API_URL}${endpoint}?${new URLSearchParams(params).toString()}`);
+      
+      const response = await apiService.get<any>(endpoint, params);
+      console.log('Response is in ApiResponse format:', response);
+      
+      // Đảm bảo trả về cấu trúc LoanResponse đúng
+      if (response && response.data) {
+        return {
+          success: true,
+          data: {
+            loans: response.data.loans || []
+          },
+          message: 'Loans fetched successfully'
+        };
+      }
+      
+      return {
+        success: true,
+        data: {
+          loans: []
+        },
+        message: 'No loans found'
+      };
     } catch (error) {
       console.error('Error fetching loans:', error);
       return {
         success: false,
-        data: {},
+        data: {
+          loans: []
+        },
         message: 'Failed to fetch loans'
       };
     }
@@ -61,15 +84,44 @@ class LoanService {
 
   async getLoanDetails(loanId: string): Promise<LoanResponse> {
     try {
+      console.log('Fetching loan details for ID:', loanId);
       const endpoint = ENDPOINTS.LOANS.GET_DETAILS.replace('${loanID}', loanId);
-      const response = await apiService.get<LoanResponse>(endpoint);
-      return response.data || { success: false, data: {}, message: 'No data returned' };
+      
+      // Sử dụng GET_BY_ID function thay vì string template để tránh lỗi
+      // const endpoint = ENDPOINTS.LOANS.GET_BY_ID(loanId);
+      
+      console.log('Calling endpoint:', `${API_URL}${endpoint}`);
+      const response = await apiService.get<any>(endpoint);
+      console.log('Loan details response:', response);
+      
+      // Kiểm tra cấu trúc response từ backend
+      if (response) {
+        // Nếu response có trường success, sử dụng nó
+        if (response.data && typeof response.data.success !== 'undefined') {
+          return response.data;
+        }
+        
+        // Nếu response có data và không có trường success, giả định là thành công
+        if (response.data) {
+          return {
+            success: true,
+            data: {
+              loan: response.data.loan || response.data,
+              goal: response.data.goal
+            },
+            message: 'Loan details fetched successfully'
+          };
+        }
+      }
+      
+      // Nếu không có data hoặc response không đúng định dạng
+      return { success: false, data: {}, message: 'No data returned' };
     } catch (error) {
       console.error('Error fetching loan details:', error);
       return {
         success: false,
         data: {},
-        message: 'Failed to fetch loan details'
+        message: error instanceof Error ? error.message : 'Failed to fetch loan details'
       };
     }
   }
@@ -82,26 +134,65 @@ class LoanService {
     endDate: string;
     monthlyPayment?: number;
     description?: string;
+    goalID?: string;
+    remainingBalance?: number;
+    paymentSchedule?: any[];
   }): Promise<LoanResponse> {
     try {
       // Lấy user data từ authService
       const userData = await authService.getStoredUserData();
       
+      // Tính toán monthlyPayment nếu không được cung cấp
+      let monthlyPayment = loanData.monthlyPayment;
+      if (!monthlyPayment) {
+        const loanDurationMonths = Math.max(1, Math.ceil((new Date(loanData.endDate).getTime() - new Date(loanData.startDate).getTime()) / (30 * 24 * 60 * 60 * 1000)));
+        monthlyPayment = loanData.loanAmount / loanDurationMonths;
+      }
+      
+      // Đảm bảo có remainingBalance
+      const remainingBalance = loanData.remainingBalance || loanData.loanAmount;
+      
       // Thêm userId vào dữ liệu và đảm bảo status là 'active'
       const data = {
         ...loanData,
         userId: userData?._id,
-        status: 'active' // Đảm bảo status là giá trị hợp lệ
+        status: 'active', // Đảm bảo status là giá trị hợp lệ
+        monthlyPayment,
+        remainingBalance,
+        paymentSchedule: loanData.paymentSchedule || []
       };
       
-      const response = await apiService.post<LoanResponse>(ENDPOINTS.LOANS.CREATE, data);
-      return response.data || { success: false, data: {}, message: 'No data returned' };
+      console.log('Sending loan data to backend:', data);
+      
+      const response = await apiService.post<any>(ENDPOINTS.LOANS.CREATE, data);
+      console.log('Loan creation response:', response);
+      
+      // Kiểm tra cấu trúc response từ backend
+      if (response) {
+        // Nếu response có trường success, sử dụng nó
+        if (response.data && typeof response.data.success !== 'undefined') {
+          return response.data;
+        }
+        
+        // Nếu response có data và không có trường success, giả định là thành công
+        if (response.data) {
+          return {
+            success: true,
+            data: {
+              loan: response.data.data || response.data
+            },
+            message: 'Loan created successfully'
+          };
+        }
+      }
+      
+      return { success: false, data: {}, message: 'No data returned' };
     } catch (error) {
       console.error('Error creating loan:', error);
       return {
         success: false,
         data: {},
-        message: 'Failed to create loan'
+        message: error instanceof Error ? error.message : 'Failed to create loan'
       };
     }
   }

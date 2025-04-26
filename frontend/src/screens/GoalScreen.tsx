@@ -49,29 +49,44 @@ const GoalScreen = () => {
     try {
       setLoading(true);
       const response = await goalService.getUserGoals();
-      if (response.success && response.data.goals) {
-        // Calculate progress percentage for each goal
-        const goalsWithProgress = response.data.goals.map((goal: Goal) => {
-          const progressPercentage = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
-          
-          // Calculate days remaining
-          const today = new Date();
-          const targetDate = new Date(goal.targetDate);
-          const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          
-          return {
-            ...goal,
-            progressPercentage,
-            daysRemaining
-          };
-        });
+      console.log('GoalScreen - Response from getUserGoals:', response);
+      
+      // Kiểm tra cấu trúc response và log để debug
+      if (response.success) {
+        console.log('GoalScreen - Goals data:', response.data?.goals);
         
-        setGoals(goalsWithProgress);
+        // Đảm bảo goals là một mảng, ngay cả khi rỗng
+        const goalsArray = response.data?.goals || [];
+        
+        if (goalsArray.length > 0) {
+          // Calculate progress percentage for each goal
+          const goalsWithProgress = goalsArray.map((goal: Goal) => {
+            const progressPercentage = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
+            
+            // Calculate days remaining
+            const today = new Date();
+            const targetDate = new Date(goal.targetDate);
+            const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            
+            return {
+              ...goal,
+              progressPercentage,
+              daysRemaining
+            };
+          });
+          
+          setGoals(goalsWithProgress);
+        } else {
+          // Nếu không có goals, đặt mảng rỗng
+          console.log('GoalScreen - No goals found, setting empty array');
+          setGoals([]);
+        }
       } else {
+        console.error('GoalScreen - Failed to load goals:', response.message);
         setError('Failed to load goals');
       }
     } catch (err) {
-      console.error('Error loading goals:', err);
+      console.error('GoalScreen - Error loading goals:', err);
       setError('An error occurred while loading goals');
     } finally {
       setLoading(false);
@@ -185,13 +200,13 @@ const GoalScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your Financial Goals</Text>
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={styles.addButton}
           onPress={handleAddGoal}
         >
           <Ionicons name="add-circle-outline" size={24} color="#1F41BB" />
           <Text style={styles.addButtonText}>Add Goal</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Goal List */}

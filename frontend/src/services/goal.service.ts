@@ -84,8 +84,17 @@ class GoalService {
   async getGoalDetails(goalId: string): Promise<GoalResponse> {
     try {
       const endpoint = ENDPOINTS.GOALS.GET_DETAILS.replace('${goalId}', goalId);
-      const response = await apiService.get<GoalResponse>(endpoint);
-      return response.data || { success: false, data: {}, message: 'No data returned' };
+      console.log('Fetching goal details from:', endpoint);
+      
+      const response = await apiService.get<any>(endpoint);
+      console.log('Goal details response:', response);
+      
+      // Trả về đúng cấu trúc response từ backend
+      return {
+        success: true,
+        data: response.data || {},
+        message: 'Goal details fetched successfully'
+      };
     } catch (error) {
       console.error('Error fetching goal details:', error);
       return {
@@ -162,8 +171,17 @@ class GoalService {
   }): Promise<GoalResponse> {
     try {
       const endpoint = ENDPOINTS.GOALS.UPDATE_PROGRESS.replace('${goalId}', goalId);
-      const response = await apiService.put<GoalResponse>(endpoint, progressData);
-      return response.data || { success: false, data: {}, message: 'No data returned' };
+      console.log('Updating goal progress at:', endpoint, 'with data:', progressData);
+      
+      const response = await apiService.put<any>(endpoint, progressData);
+      console.log('Goal progress update response:', response);
+      
+      // Trả về đúng cấu trúc GoalResponse
+      return {
+        success: true,
+        data: response.data || {},
+        message: response.message || 'Goal progress updated successfully'
+      };
     } catch (error) {
       console.error('Error updating goal progress:', error);
       return {
