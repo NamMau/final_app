@@ -1,4 +1,4 @@
-                                                                                Personal Finance Management App
+                                                           Personal Finance Management App
 
 **FINAL_APP**  
 *Empower Your Finances, Achieve Your Goals Today.*  
