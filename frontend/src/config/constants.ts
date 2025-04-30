@@ -1,9 +1,19 @@
-// export const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.7:4000/api';
-// export const API_KEY = process.env.REACT_APP_API_KEY || 'super_secret_password';
-//export const API_URL = 'http://192.168.1.8:4000/api';
-//export const API_URL = 'http://192.168.0.105:4000/api';
-export const API_URL = 'http://192.168.1.12:4000/api';
+// API Configuration
+//export const API_URL = 'http://192.168.1.5:4000/api';
+export const API_URL = 'http://192.168.11.242:4000/api';
 export const API_KEY = 'super_secret_password';
+
+// Rate Limiting Configuration
+export const RATE_LIMIT_CONFIG = {
+  maxRetries: 3,           // Maximum number of retry attempts
+  initialDelayMs: 1000,    // Initial delay before first retry (1 second)
+  maxDelayMs: 10000,       // Maximum delay between retries (10 seconds)
+  backoffFactor: 2,        // Exponential backoff multiplier
+  requestsPerMinute: 30,   // Target requests per minute to stay under rate limit
+};
+
+// Request Timeout Configuration
+export const REQUEST_TIMEOUT_MS = 15000; // 15 seconds
 
 export const ENDPOINTS = {
   AUTH: {
