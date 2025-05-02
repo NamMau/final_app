@@ -1,91 +1,113 @@
-                                                           Personal Finance Management App
-
-**FINAL_APP**  
-*Empower Your Finances, Achieve Your Goals Today.*  
-
-- **Last commit:** last Saturday  
-- **Languages used:**
-  - JavaScript: 29.1% 
-  - TypeScript: 69.9%  
-
-**Built with the tools and technologies:**  
-- Express  
-- JSON  
-- npm  
-- Mongoose  
-- .ENV  
-- JavaScript  
-- sharp  
-- Nodemon  
-- React  
-- TypeScript  
-- Expo  
-- Axios  
-- datefns  
-- Jest
-
-
-## Table of Contents
-
-- **Overview**
-- **Getting Started**
-  - Prerequisites
-  - Installation
-  - Usage
-  - Testing
- 
-## personal finance management app
+💰 Domi Personal Finance Management App
 Empower Your Finances, Achieve Your Goals Today.
+📌 Last Commit: Last Saturday
+🛠 Languages Used:
+- JavaScript 🟢 - 29.1%
+- TypeScript 🔵 - 69.9%
 
-**Introduction**:  
-personal finance management app is a powerful tool for financial tracking and budgeting.  
 
-### Purpose  
-Simplify personal finance management through:
-- Robust API for secure user authentication.
-- User-friendly frontend design.  
+🔗 Built With
+Backend & API:
+- Express.js ⚡ - Web framework for Node.js
+- Mongoose 🗄️ - MongoDB object modeling tool
+- .ENV 📝 - Environment variable management
 
-### Core Features  
-- **Dependency Management**: Ensures consistent package versions for reliable development.  
-- **Robust API Functionality**: Secure user authentication and comprehensive financial data handling.  
-- **User-Centric Services**: Enhances engagement with services for budgets, transactions, loans, and goals.  
-- **Real-Time Data Visualization**: Visualizes financial data for better understanding and decision-making.  
-- **Seamless Integration**: Facilitates smooth interactions between frontend and backend, boosting developer productivity.
+Frontend:
+- React Native 📱 - Cross-platform mobile app framework
+- Expo 🚀 - Streamlined React Native development
 
-## Getting Started
+Utilities & Tools:
+- JSON 📄 - Data exchange format
+- npm 📦 - Package manager for JavaScript
+- Axios 🔄 - HTTP client for API requests
+- date-fns 🕒 - Date manipulation library
+- Jest ✅ - JavaScript testing framework
+- Nodemon 🔄 - Auto-restart server during development
+- Sharp 🖼️ - High-performance image processing
 
-### Prerequisites
-This project requires the following dependencies:
-- **Programming Language**: JavaScript
-- **Package Manager**: Npm
 
-### Installation
-Build `final_app` from the source and install dependencies:
+📖 Table of Contents
+- Overview
+- Getting Started
+- Prerequisites
+- Installation
+- Usage
+- Testing
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/NamMau/final_app
 
-### Installation
-Build `final_app` from the source and install dependencies:
+🔍 Overview
+Domi Personal Finance Management App is a powerful tool designed to help users track expenses, manage budgets, and plan financial goals effectively. The app integrates a secure backend with a user-friendly frontend, ensuring a seamless financial experience for individuals.
 
+🚀 Getting Started
+✅ Prerequisites
+Before setting up the project, make sure you have:
+- Node.js 🟢 → Download Node.js
+- MongoDB 🗄️ → Install MongoDB
+- npm 📦 → Comes with Node.js
+
+
+⚙️ Installation
+📥 Clone the Repository
+git clone https://github.com/NamMau/final_app
+
+
+Navigate into the project directory:
 cd final_app
 
+
+🔹 Backend Setup
+1️⃣ Navigate to backend directory:
+cd backend
+
+
+2️⃣ Install dependencies:
 npm install
 
-### Usage
-Run the project with:
 
-Using npm:
-```bash
-npm start
+3️⃣ Set up environment variables in a .env file:
+PORT=your-port-here
+MONGO_URL=your-url-here
+JWT_SECRET=your-jwt-secret-here
+JWT_REFRESH_SECRET=your-jwt-secret-here
+API_PASSWORD=your-jwt-secret-here
+NODE_ENV=development
 
-- **"Testing"**:
+
+🔹 Frontend Setup
+1️⃣ Navigate to frontend directory:
+cd ../frontend
+
+
+2️⃣ Install dependencies:
+npm install
+
+
+
+▶️ Usage
+🎯 Run the Backend
+Execute the following command in the backend directory:
+npx nodemon app.js
+
+
+✔️ This starts the Express.js server on localhost:
+🎯 Run the Frontend
+Run the frontend development server using Expo:
+npx expo start
+
+
+✔️ The React Native Expo app starts on localhost:
+
+🛠️ Testing
+✅ Run Tests
+Execute tests using Jest:
 npm test
 
-### Return
-To go back to the previous section or page, click on the **Return** button.  
-The button is labeled with blue text and features an upward arrow icon.  
 
+✔️ This ensures API and frontend functionality is working as expected.
 
-
+📊 Core Features
+✅ 📦 Dependency Management: Ensures consistent package versions for reliable development.
+✅ 🔐 Robust API Functionality: Secure user authentication and comprehensive financial data handling.
+✅ 💰 User-Centric Services: Enhances engagement with services for budgets, transactions, loans, and goals.
+✅ 📈 Real-Time Data Visualization: Visualizes financial data for better understanding and decision-making.
+✅ 🔗 Seamless Integration: Facilitates smooth interactions between frontend and backend, boosting developer productivity.
