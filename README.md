@@ -65,13 +65,9 @@ npm install
 
 
 3️⃣ Set up environment variables in a .env file:
-PORT=your-port-here
-MONGO_URL=your-url-here
-JWT_SECRET=your-jwt-secret-here
-JWT_REFRESH_SECRET=your-jwt-secret-here
-API_PASSWORD=your-jwt-secret-here
-NODE_ENV=development
-
+...
+...
+...
 
 🔹 Frontend Setup
 1️⃣ Navigate to frontend directory:
