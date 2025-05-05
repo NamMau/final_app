@@ -9,7 +9,7 @@ export interface Transaction {
     billName: string;
   };
   amount: number;
-  type: 'bill_payment';
+  type: 'bill_payment' | 'expense' | 'income';
   category: {
     _id: string;
     categoryName: string;

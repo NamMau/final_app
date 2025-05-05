@@ -116,13 +116,34 @@ const generateFinancialReport = async (userId, period = 'month') => {
       .sort((a, b) => b.amount - a.amount);
 
     // Calculate budget statuses
-    const budgetStatuses = budgets.map(budget => ({
+    const budgetStatuses = budgets.map((budget, index) => ({
       name: budget.name,
       spent: budget.spent,
       total: budget.amount,
-      percentage: (budget.spent / budget.amount) * 100
+      percentage: (budget.spent / budget.amount) * 100,
+      categoryID: budget.categoryID ? budget.categoryID._id : null,
+      color: getColorForIndex(index)
     }))
     .sort((a, b) => b.percentage - a.percentage);
+    
+    // Generate budget comparisons
+    const budgetComparisons = budgets.map((budget, index) => {
+      const categoryName = budget.categoryID ? budget.categoryID.categoryName : budget.name;
+      const budgetAmount = budget.amount;
+      const actualSpent = budget.spent;
+      const difference = budgetAmount - actualSpent;
+      const percentageOfBudget = (actualSpent / budgetAmount) * 100;
+      
+      return {
+        categoryName,
+        budgetAmount,
+        actualSpent,
+        difference,
+        percentageOfBudget,
+        color: getColorForIndex(index)
+      };
+    })
+    .sort((a, b) => b.percentageOfBudget - a.percentageOfBudget);
 
     // Generate monthly data
     const monthlyData = generateMonthlyData(transactions, period);
@@ -133,7 +154,7 @@ const generateFinancialReport = async (userId, period = 'month') => {
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
 
     // Generate insights
-    const insightsData = await generateInsights(categorySpending, budgetStatuses, monthlyData, user.totalBalance, period);
+    const insightsData = await generateInsights(categorySpending, budgetStatuses, monthlyData, user.totalBalance, period, budgetComparisons);
 
     // Create report data
     const reportData = {
@@ -142,6 +163,7 @@ const generateFinancialReport = async (userId, period = 'month') => {
       period,
       categorySpending,
       budgetStatuses,
+      budgetComparisons,
       monthlyData,
       insights: insightsData.insights,
       recommendations: insightsData.recommendations,
@@ -220,7 +242,7 @@ const generateMonthlyData = (transactions, period) => {
 };
 
 // Helper function to generate insights
-const generateInsights = async (categorySpending, budgetStatuses, monthlyData, balance, period) => {
+const generateInsights = async (categorySpending, budgetStatuses, monthlyData, balance, period, budgetComparisons) => {
   try {
     const insights = [];
     const recommendations = [];
@@ -299,14 +321,12 @@ const generateInsights = async (categorySpending, budgetStatuses, monthlyData, b
     
     // 2. Analyze budget statuses
     if (budgetStatuses && budgetStatuses.length > 0) {
-      // Find budgets that are close to or over threshold
       const overBudgets = budgetStatuses.filter(budget => budget.percentage >= 90);
       const nearBudgets = budgetStatuses.filter(budget => budget.percentage >= 70 && budget.percentage < 90);
       
       if (overBudgets.length > 0) {
         insights.push(`You have ${overBudgets.length} budget${overBudgets.length > 1 ? 's' : ''} that ${overBudgets.length > 1 ? 'are' : 'is'} over 90% spent.`);
         
-        // Add specific budget recommendations
         overBudgets.forEach(budget => {
           recommendations.push(`Increase your '${budget.name}' budget or reduce spending as it's currently at ${Math.round(budget.percentage)}% of limit.`);
         });
@@ -326,7 +346,55 @@ const generateInsights = async (categorySpending, budgetStatuses, monthlyData, b
       recommendations.push(`Set up budget categories to better monitor your spending patterns.`);
     }
     
-    // 3. Analyze income vs expenses
+    // 3. Analyze budget comparisons
+    if (budgetComparisons && budgetComparisons.length > 0) {
+      // Find categories that are significantly over budget
+      const overBudgetCategories = budgetComparisons.filter(comp => comp.percentageOfBudget > 100);
+      // Find categories that are significantly under budget
+      const underBudgetCategories = budgetComparisons.filter(comp => comp.percentageOfBudget < 70);
+      
+      if (overBudgetCategories.length > 0) {
+        const worstCategory = overBudgetCategories.sort((a, b) => b.percentageOfBudget - a.percentageOfBudget)[0];
+        insights.push(`You've exceeded your '${worstCategory.categoryName}' budget by ${Math.round(worstCategory.percentageOfBudget - 100)}%.`);
+        recommendations.push(`Review your spending in '${worstCategory.categoryName}' category and consider adjusting your budget or reducing expenses.`);
+        
+        if (overBudgetCategories.length > 1) {
+          insights.push(`You have ${overBudgetCategories.length} categories where spending exceeds the budget.`);
+        }
+      }
+      
+      if (underBudgetCategories.length > 0) {
+        const mostUnderCategory = underBudgetCategories.sort((a, b) => a.percentageOfBudget - b.percentageOfBudget)[0];
+        insights.push(`You're only using ${Math.round(mostUnderCategory.percentageOfBudget)}% of your '${mostUnderCategory.categoryName}' budget.`);
+        
+        if (overBudgetCategories.length > 0) {
+          recommendations.push(`Consider reallocating some funds from '${mostUnderCategory.categoryName}' to categories where you're over budget.`);
+        }
+      }
+      
+      // Calculate overall budget adherence
+      const totalBudget = budgetComparisons.reduce((sum, comp) => sum + comp.budgetAmount, 0);
+      const totalSpent = budgetComparisons.reduce((sum, comp) => sum + comp.actualSpent, 0);
+      
+      if (totalBudget > 0) {
+        const overallPercentage = (totalSpent / totalBudget) * 100;
+        
+        if (overallPercentage > 100) {
+          insights.push(`Overall, you're spending ${Math.round(overallPercentage - 100)}% more than your total budget.`);
+          recommendations.push(`Consider reviewing your entire budget and looking for ways to reduce spending across categories.`);
+        } else if (overallPercentage > 90) {
+          insights.push(`You're using ${Math.round(overallPercentage)}% of your total budget.`);
+          recommendations.push(`You're close to your overall budget limit. Monitor your spending carefully for the rest of the period.`);
+        } else if (overallPercentage < 70) {
+          insights.push(`You're only using ${Math.round(overallPercentage)}% of your total budget.`);
+          recommendations.push(`You might be over-budgeting. Consider adjusting your budget to be more realistic or saving the extra money.`);
+        } else {
+          insights.push(`Your overall spending is at ${Math.round(overallPercentage)}% of your total budget, which is healthy.`);
+        }
+      }
+    }
+    
+    // 4. Analyze income vs expenses
     if (monthlyData && monthlyData.labels && monthlyData.labels.length > 0) {
       const totalIncome = monthlyData.income.reduce((sum, inc) => sum + inc, 0);
       const totalExpenses = monthlyData.expenses.reduce((sum, exp) => sum + exp, 0);
@@ -424,10 +492,10 @@ const generateInsights = async (categorySpending, budgetStatuses, monthlyData, b
       recommendations.push(`Set up budget categories to better monitor your spending patterns.`);
     }
     
-    // Limit to top 4 insights and recommendations
+    // Limit to top 5 insights and recommendations, but ensure we include budget comparison insights
     return {
-      insights: insights.slice(0, 4),
-      recommendations: recommendations.slice(0, 4)
+      insights: insights.slice(0, 5),
+      recommendations: recommendations.slice(0, 5)
     };
   } catch (error) {
     console.error('Error generating insights:', error);
@@ -476,10 +544,506 @@ const formatCurrency = (amount) => {
   }
 };
 
+/**
+ * Detect unusual spending patterns
+ * @param {Object} params - Parameters for unusual spending detection
+ * @param {string} params.userId - User ID
+ * @param {string} params.startDate - Start date for analysis
+ * @param {string} params.endDate - End date for analysis
+ * @param {number} params.threshold - Threshold percentage for unusual spending (e.g., 150 means 150% of average)
+ * @param {boolean} params.includeSeasonalContext - Whether to include seasonal context in analysis
+ * @returns {Object} Unusual spending data
+ */
+const detectUnusualSpending = async ({
+  userId,
+  startDate,
+  endDate,
+  threshold,
+  includeSeasonalContext
+}) => {
+  try {
+    // Get bills for the analysis period (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const bills = await Bill.find({
+      userId,
+      date: { $gte: sixMonthsAgo }
+    }).sort({ date: -1 });
+    
+    if (!bills || bills.length === 0) {
+      return {
+        unusualTransactions: [],
+        insights: ['No bills found for analysis']
+      };
+    }
+    
+    // Group bills by category and calculate statistics
+    const categoryStats = {};
+    bills.forEach(bill => {
+      if (!categoryStats[bill.category]) {
+        categoryStats[bill.category] = {
+          transactions: [],
+          total: 0,
+          count: 0,
+          average: 0,
+          standardDeviation: 0
+        };
+      }
+      
+      categoryStats[bill.category].transactions.push(bill);
+      categoryStats[bill.category].total += bill.amount;
+      categoryStats[bill.category].count += 1;
+    });
+    
+    // Calculate average and standard deviation for each category
+    Object.keys(categoryStats).forEach(category => {
+      const stats = categoryStats[category];
+      stats.average = stats.total / stats.count;
+      
+      // Calculate standard deviation
+      const squaredDifferences = stats.transactions.map(bill => 
+        Math.pow(bill.amount - stats.average, 2)
+      );
+      const variance = squaredDifferences.reduce((sum, val) => sum + val, 0) / stats.count;
+      stats.standardDeviation = Math.sqrt(variance);
+    });
+    
+    // Find unusual transactions
+    const unusualTransactions = [];
+    const analysisStartDate = new Date(startDate);
+    const analysisEndDate = new Date(endDate);
+    
+    // Track frequency of unusual transactions per category
+    const categoryFrequency = {};
+    
+    bills.forEach(bill => {
+      const billDate = new Date(bill.date);
+      
+      // Skip bills outside the analysis period
+      if (billDate < analysisStartDate || billDate > analysisEndDate) {
+        return;
+      }
+      
+      const stats = categoryStats[bill.category];
+      if (!stats) return;
+      
+      // Calculate how much this transaction deviates from the average
+      const percentageAboveAverage = ((bill.amount - stats.average) / stats.average) * 100;
+      
+      // Check if transaction is unusual based on threshold and standard deviation
+      const isUnusual = 
+        percentageAboveAverage > threshold || 
+        (stats.standardDeviation > 0 && 
+         bill.amount > stats.average + 2 * stats.standardDeviation);
+      
+      if (isUnusual) {
+        // Track frequency
+        if (!categoryFrequency[bill.category]) {
+          categoryFrequency[bill.category] = 1;
+        } else {
+          categoryFrequency[bill.category]++;
+        }
+        
+        // Determine seasonal context if requested
+        let seasonalContext = null;
+        if (includeSeasonalContext) {
+          const month = billDate.getMonth();
+          
+          // Tet/Holiday season (December-February)
+          if (month === 11 || month === 0 || month === 1) {
+            seasonalContext = 'Tet/Holiday season';
+          }
+          // Summer season (June-August)
+          else if (month >= 5 && month <= 7) {
+            seasonalContext = 'Summer season';
+          }
+        }
+        
+        unusualTransactions.push({
+          category: bill.category,
+          amount: bill.amount,
+          percentageAboveAverage: percentageAboveAverage,
+          date: bill.date,
+          seasonalContext: seasonalContext
+        });
+      }
+    });
+    
+    // Add frequency information to unusual transactions
+    unusualTransactions.forEach(transaction => {
+      const frequency = categoryFrequency[transaction.category];
+      if (frequency > 1) {
+        transaction.frequency = `${frequency} unusual transactions in this category`;
+      }
+    });
+    
+    // Sort by percentage above average (descending)
+    unusualTransactions.sort((a, b) => b.percentageAboveAverage - a.percentageAboveAverage);
+    
+    // Generate insights
+    const insights = generateUnusualSpendingInsights(unusualTransactions, categoryFrequency);
+    
+    return {
+      unusualTransactions,
+      insights
+    };
+  } catch (error) {
+    console.error('Error detecting unusual spending:', error);
+    throw new Error('Failed to detect unusual spending patterns');
+  }
+};
+
+/**
+ * Generate insights from unusual spending data
+ * @param {Array} unusualTransactions - List of unusual transactions
+ * @param {Object} categoryFrequency - Frequency of unusual transactions by category
+ * @returns {Array} List of insights
+ */
+const generateUnusualSpendingInsights = (unusualTransactions, categoryFrequency) => {
+  const insights = [];
+  
+  if (unusualTransactions.length === 0) {
+    insights.push('No unusual spending patterns detected.');
+    return insights;
+  }
+  
+  // Most affected category
+  const mostAffectedCategory = Object.entries(categoryFrequency)
+    .sort((a, b) => b[1] - a[1])[0];
+  
+  if (mostAffectedCategory) {
+    insights.push(
+      `${mostAffectedCategory[0]} has the most unusual transactions (${mostAffectedCategory[1]}).`
+    );
+  }
+  
+  // Seasonal patterns
+  const seasonalItems = unusualTransactions.filter(item => item.seasonalContext);
+  if (seasonalItems.length > 0) {
+    const seasonalCounts = {};
+    seasonalItems.forEach(item => {
+      if (!seasonalCounts[item.seasonalContext]) {
+        seasonalCounts[item.seasonalContext] = 0;
+      }
+      seasonalCounts[item.seasonalContext]++;
+    });
+    
+    Object.entries(seasonalCounts).forEach(([season, count]) => {
+      insights.push(
+        `${count} unusual transaction${count !== 1 ? 's' : ''} occurred during ${season}.`
+      );
+    });
+  }
+  
+  // Highest deviation
+  if (unusualTransactions.length > 0) {
+    const highestDeviation = unusualTransactions[0];
+    insights.push(
+      `Highest deviation: ${highestDeviation.category} at +${Math.round(highestDeviation.percentageAboveAverage)}% above average.`
+    );
+  }
+  
+  return insights;
+};
+
+/**
+ * Generate spending optimization recommendations for a user
+ * @param {string} userId - User ID
+ * @returns {Array} - Array of spending optimization recommendations
+ */
+const getSpendingOptimizations = async (userId) => {
+  try {
+    // Get transactions from the last 6 months
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const transactionService = require('./transaction.service');
+    
+    // Get user transactions for the past 6 months
+    const transactions = await transactionService.getUserTransactions(userId, {
+      startDate: sixMonthsAgo,
+      endDate: new Date()
+    });
+    
+    // For bills, we'll use transactions with bill references or in bill-related categories
+    const billTransactions = transactions.filter(t => 
+      t.bill || 
+      (t.category && t.category.categoryName && 
+        ['Bills', 'Utilities', 'Rent', 'Mortgage', 'Insurance'].some(cat => 
+          t.category.categoryName.includes(cat)
+        )
+      )
+    );
+    
+    // Generate recommendations based on transaction data
+    const recommendations = await generateSpendingRecommendations(transactions, billTransactions);
+    
+    return recommendations;
+  } catch (error) {
+    console.error('Error generating spending optimization recommendations:', error);
+    throw new Error('Failed to generate spending optimization recommendations');
+  }
+};
+
+/**
+ * Generate spending optimization recommendations based on transaction data
+ * @param {Array} transactions - User transactions
+ * @param {Array} billTransactions - Transactions related to bills
+ * @returns {Array} - Array of spending optimization recommendations
+ */
+const generateSpendingRecommendations = async (transactions, billTransactions) => {
+  // Initialize recommendations array
+  const recommendations = [];
+  
+  // Skip if not enough data
+  if (!transactions || transactions.length < 10) {
+    return recommendations;
+  }
+  
+  try {
+    // Group transactions by category
+    const categoriesMap = {};
+    transactions.forEach(transaction => {
+      if (transaction.type === 'expense' || transaction.type === 'bill_payment') {
+        const categoryName = transaction.category && transaction.category.categoryName ? 
+          transaction.category.categoryName : 'Uncategorized';
+        
+        if (!categoriesMap[categoryName]) {
+          categoriesMap[categoryName] = [];
+        }
+        categoriesMap[categoryName].push(transaction);
+      }
+    });
+    
+    // Find top spending categories
+    const topCategories = Object.entries(categoriesMap)
+      .map(([category, transactions]) => ({
+        category,
+        total: transactions.reduce((sum, t) => sum + t.amount, 0),
+        count: transactions.length
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+    
+    // Analyze day of week patterns
+    const dayOfWeekSpending = Array(7).fill(0);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    transactions.forEach(transaction => {
+      if (transaction.type === 'expense') {
+        const date = new Date(transaction.date);
+        const dayOfWeek = date.getDay();
+        dayOfWeekSpending[dayOfWeek] += transaction.amount;
+      }
+    });
+    
+    // Find most expensive day
+    const mostExpensiveDay = dayOfWeekSpending.indexOf(Math.max(...dayOfWeekSpending));
+    
+    // Find potential subscriptions
+    const potentialSubscriptions = findPotentialSubscriptions(transactions);
+    
+    // Generate recommendations based on the analysis
+    
+    // 1. High spending category recommendation
+    if (topCategories.length > 0) {
+      const topCategory = topCategories[0];
+      const monthlyAverage = topCategory.total / 6; // 6 months of data
+      
+      recommendations.push({
+        id: `cat-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type: 'cut_spending',
+        title: `Reduce ${topCategory.category} Expenses`,
+        description: `You've spent $${topCategory.total.toFixed(2)} on ${topCategory.category} in the last 6 months (avg. $${(monthlyAverage).toFixed(2)}/month). Consider setting a budget to reduce this by 15%.`,
+        potentialSavings: Math.round(monthlyAverage * 0.15),
+        category: topCategory.category,
+        relevanceScore: 95,
+        implementationDifficulty: 'medium',
+        icon: 'trending-down',
+        color: '#FF6B6B'
+      });
+    }
+    
+    // 2. Day of week optimization
+    if (mostExpensiveDay !== -1) {
+      const cheapestDay = dayOfWeekSpending.indexOf(Math.min(...dayOfWeekSpending.filter(amount => amount > 0)));
+      
+      if (cheapestDay !== -1 && mostExpensiveDay !== cheapestDay) {
+        const savings = (dayOfWeekSpending[mostExpensiveDay] - dayOfWeekSpending[cheapestDay]) / 26; // 26 weeks in 6 months
+        
+        recommendations.push({
+          id: `day-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'time_optimization',
+          title: `Shop on ${dayNames[cheapestDay]} Instead`,
+          description: `You tend to spend more on ${dayNames[mostExpensiveDay]}s. Consider shifting your shopping to ${dayNames[cheapestDay]}s, when you historically spend less.`,
+          potentialSavings: Math.round(savings),
+          category: 'Shopping',
+          relevanceScore: 85,
+          implementationDifficulty: 'easy',
+          icon: 'calendar',
+          color: '#4ECDC4'
+        });
+      }
+    }
+    
+    // 3. Subscription optimization
+    if (potentialSubscriptions.length > 0) {
+      // Find the subscription with the highest monthly cost
+      const topSubscription = potentialSubscriptions.sort((a, b) => b.monthlyAmount - a.monthlyAmount)[0];
+      
+      recommendations.push({
+        id: `sub-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type: 'service_replacement',
+        title: `Review ${topSubscription.name} Subscription`,
+        description: `You're spending about $${topSubscription.monthlyAmount.toFixed(2)} monthly on ${topSubscription.name}. Consider if you're getting enough value or if there are cheaper alternatives.`,
+        potentialSavings: Math.round(topSubscription.monthlyAmount * 0.5), // Assume 50% savings from canceling or finding alternative
+        category: topSubscription.category,
+        relevanceScore: 90,
+        implementationDifficulty: 'medium',
+        icon: 'repeat',
+        color: '#1F41BB'
+      });
+    }
+    
+    // 4. Food expense optimization (if applicable)
+    const foodCategory = topCategories.find(cat => 
+      ['Food', 'Dining', 'Restaurants', 'Groceries', 'Buying foods'].some(foodCat => 
+        cat.category && cat.category.includes(foodCat)
+      )
+    );
+    
+    if (foodCategory) {
+      const monthlyFoodExpense = foodCategory.total / 6;
+      
+      recommendations.push({
+        id: `food-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type: 'habit_change',
+        title: 'Meal Prep Savings',
+        description: `Preparing meals at home instead of eating out could save you up to 70% on food expenses. Based on your current spending, that's a significant monthly saving.`,
+        potentialSavings: Math.round(monthlyFoodExpense * 0.3),
+        category: foodCategory.category,
+        relevanceScore: 80,
+        implementationDifficulty: 'medium',
+        icon: 'restaurant',
+        color: '#FF9F1C'
+      });
+    }
+    
+    // 5. Bill negotiation (if applicable)
+    if (billTransactions && billTransactions.length > 0) {
+      // Find recurring bill transactions that might be negotiable
+      const negotiableBillCategories = ['Utilities', 'Internet', 'Phone', 'Insurance', 'Subscription', 'Electricity', 'Water'];
+      const negotiableBills = billTransactions.filter(transaction => 
+        negotiableBillCategories.some(category => 
+          (transaction.category && transaction.category.categoryName && 
+            transaction.category.categoryName.includes(category)) || 
+          (transaction.description && transaction.description.includes(category)) ||
+          (transaction.bill && transaction.bill.billName && 
+            negotiableBillCategories.some(cat => transaction.bill.billName.includes(cat)))
+        )
+      );
+      
+      // If no specific negotiable bills found, use any bill transactions as a fallback
+      const billsToUse = negotiableBills.length > 0 ? negotiableBills : billTransactions;
+      
+      if (billsToUse.length > 0) {
+        // Calculate average monthly bill amount
+        const totalBillAmount = billsToUse.reduce((sum, bill) => sum + bill.amount, 0);
+        const avgMonthlyBill = totalBillAmount / billsToUse.length;
+        
+        recommendations.push({
+          id: `bill-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'reallocate_budget',
+          title: 'Negotiate Service Bills',
+          description: `Many service providers will offer discounts if you call and negotiate. Consider calling your providers to request better rates on your recurring bills.`,
+          potentialSavings: Math.round(avgMonthlyBill * 0.15), // Assume 15% savings from negotiation
+          category: 'Bills',
+          relevanceScore: 75,
+          implementationDifficulty: 'easy',
+          icon: 'call',
+          color: '#45B7D1'
+        });
+      }
+    }
+    
+    // Sort recommendations by relevance score (highest first)
+    return recommendations.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  } catch (error) {
+    console.error('Error generating spending recommendations:', error);
+    return [];
+  }
+};
+
+/**
+ * Find potential subscription services in transaction history
+ * @param {Array} transactions - User transactions
+ * @returns {Array} - Array of potential subscription services
+ */
+const findPotentialSubscriptions = (transactions) => {
+  const subscriptions = [];
+  const potentialSubscriptionMap = {};
+  
+  // Look for transactions with similar amounts and descriptions
+  transactions.forEach(transaction => {
+    if (transaction.type !== 'expense' && transaction.type !== 'bill_payment') return;
+    
+    // Create a key based on amount and partial description
+    const amount = Math.round(transaction.amount * 100) / 100; // Round to 2 decimal places
+    const descriptionWords = transaction.description ? transaction.description.split(' ') : [];
+    const firstTwoWords = descriptionWords.slice(0, 2).join(' ').toLowerCase();
+    const key = `${firstTwoWords}-${amount}`;
+    
+    if (!potentialSubscriptionMap[key]) {
+      potentialSubscriptionMap[key] = {
+        transactions: [],
+        amount,
+        description: transaction.description || '',
+        category: transaction.category && transaction.category.categoryName ? 
+          transaction.category.categoryName : 'Uncategorized'
+      };
+    }
+    
+    potentialSubscriptionMap[key].transactions.push(transaction);
+  });
+  
+  // Filter for recurring patterns (at least 3 occurrences)
+  Object.values(potentialSubscriptionMap).forEach(sub => {
+    if (sub.transactions.length >= 3) {
+      // Check if the transactions occur at regular intervals
+      const dates = sub.transactions.map(t => new Date(t.date).getTime()).sort();
+      let isRegular = true;
+      
+      // Calculate average interval between transactions
+      const intervals = [];
+      for (let i = 1; i < dates.length; i++) {
+        intervals.push(dates[i] - dates[i-1]);
+      }
+      
+      const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+      const monthInMs = 30 * 24 * 60 * 60 * 1000;
+      
+      // Check if average interval is roughly monthly (between 25 and 35 days)
+      if (avgInterval >= 0.8 * monthInMs && avgInterval <= 1.2 * monthInMs) {
+        subscriptions.push({
+          name: sub.description.split(' ').slice(0, 3).join(' '),
+          monthlyAmount: sub.amount,
+          category: sub.category,
+          occurrences: sub.transactions.length
+        });
+      }
+    }
+  });
+  
+  return subscriptions;
+};
+
 module.exports = {
   createFinancialReport,
   getFinancialReports,
   getFinancialReportById,
   generateFinancialReport,
-  generateInsights
+  generateInsights,
+  detectUnusualSpending,
+  getSpendingOptimizations
 };

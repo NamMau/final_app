@@ -18,6 +18,7 @@ export type RootStackParamList = {
   Profile: { balanceUpdated?: boolean };
   Bills: undefined;
   FinancialReport: undefined;
+  Gamification: undefined;
   
   // New screens for Goals
   Goal: undefined;

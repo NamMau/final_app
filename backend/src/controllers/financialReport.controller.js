@@ -116,6 +116,7 @@ const generateInsights = async (req, res) => {
       period, 
       categorySpending,
       budgetStatuses,
+      budgetComparisons,
       monthlyData,
       balance
     } = req.body;
@@ -124,6 +125,7 @@ const generateInsights = async (req, res) => {
       period,
       categorySpendingLength: categorySpending ? categorySpending.length : 0,
       budgetStatusesLength: budgetStatuses ? budgetStatuses.length : 0,
+      budgetComparisonsLength: budgetComparisons ? budgetComparisons.length : 0,
       hasMonthlyData: monthlyData && monthlyData.labels ? monthlyData.labels.length > 0 : false,
       balance: balance || 0
     });
@@ -147,7 +149,8 @@ const generateInsights = async (req, res) => {
       budgetStatuses,
       monthlyData,
       balance || 0,
-      period
+      period,
+      budgetComparisons
     );
     
     console.log('Generated insights:', {
@@ -173,10 +176,83 @@ const generateInsights = async (req, res) => {
   }
 };
 
+/**
+ * Detect unusual spending patterns
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const detectUnusualSpending = async (req, res) => {
+  try {
+    const { startDate, endDate, threshold, includeSeasonalContext } = req.body;
+    const userId = req.user._id;
+
+    // Validate required fields
+    if (!startDate || !endDate || !threshold) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: startDate, endDate, or threshold',
+      });
+    }
+
+    // Call service to detect unusual spending
+    const unusualSpendingData = await financialReportService.detectUnusualSpending({
+      userId,
+      startDate,
+      endDate,
+      threshold: parseFloat(threshold),
+      includeSeasonalContext: includeSeasonalContext === true
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: unusualSpendingData,
+      message: 'Unusual spending patterns detected successfully',
+    });
+  } catch (error) {
+    console.error('Error detecting unusual spending:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to detect unusual spending patterns',
+    });
+  }
+};
+
+/**
+ * Get spending optimization recommendations
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getSpendingOptimizations = async (req, res) => {
+  try {
+    // Extract userId from the authenticated user object
+    // Make sure we're using the string representation of the ID
+    const userId = req.user.id || req.user._id.toString();
+
+    console.log('Getting spending optimizations for user:', userId);
+
+    // Get spending optimization recommendations
+    const recommendations = await financialReportService.getSpendingOptimizations(userId);
+
+    return res.status(200).json({
+      success: true,
+      data: recommendations,
+      message: 'Spending optimization recommendations generated successfully',
+    });
+  } catch (error) {
+    console.error('Error generating spending optimization recommendations:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate spending optimization recommendations',
+    });
+  }
+};
+
 module.exports = {
   createFinancialReport,
   getFinancialReports,
   getFinancialReportById,
   generateFinancialReport,
-  generateInsights
+  generateInsights,
+  detectUnusualSpending,
+  getSpendingOptimizations
 };

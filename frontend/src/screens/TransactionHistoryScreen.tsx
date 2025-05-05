@@ -28,17 +28,9 @@ export default function TransactionHistoryScreen() {
     try {
       setIsLoading(true);
       
-      // Get start and end dates for current month
-      const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-
-      console.log('Fetching transactions from', startDate, 'to', endDate);
-
-      const transactionsData = await transactionsService.getTransactions({
-        startDate,
-        endDate
-      });
+      // Fetch all transactions instead of just the current month
+      // This will show the complete transaction history
+      const transactionsData = await transactionsService.getTransactions();
       
       console.log('Transactions loaded:', transactionsData);
       console.log('Number of transactions:', transactionsData.length);
@@ -47,7 +39,7 @@ export default function TransactionHistoryScreen() {
       setTransactions(transactionsData || []);
       
       if (transactionsData.length === 0) {
-        console.log('No transactions found for the selected period');
+        console.log('No transactions found');
       }
     } catch (error) {
       console.error('Error loading data:', error);

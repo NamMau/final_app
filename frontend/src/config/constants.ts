@@ -3,7 +3,8 @@
 
 // Use ngrok URL for the backend - this allows your Expo app to reach your backend through the internet
 //export const API_URL = 'https://f00d-2001-ee0-8209-1109-28d5-8e30-9009-854d.ngrok-free.app/api';
-export const API_URL = 'https://3367-2001-ee0-8209-1109-99-2f89-e0a2-59b8.ngrok-free.app/api';
+//export const API_URL = 'https://3367-2001-ee0-8209-1109-99-2f89-e0a2-59b8.ngrok-free.app/api';
+export const API_URL = 'https://9b05-2402-800-61b3-8662-bc94-8893-c22b-84bb.ngrok-free.app/api'
 //export const API_URL = 'http://172.18.208.1:4000/api';
 //export const API_URL = 'http://192.168.11.242:4000/api';
 
@@ -102,12 +103,21 @@ export const ENDPOINTS = {
   },
   FINANCIAL_REPORTS: {
     BASE: '/v1/financial-reports',
-    GENERATE: '/v1/financial-reports/generate'
+    GENERATE: '/v1/financial-reports/generate',
+    UNUSUAL_SPENDING: '/v1/financial-reports/unusual-spending',
+    SPENDING_OPTIMIZATION: '/v1/financial-reports/spending-optimization'
   },
   NOTIFICATIONS: {
     CREATE: '/v1/notifications/create-notification',
     GET_USER: '/v1/notifications/get-user-notifications/${userID}',
     MARK_READ: (id: string) => `/v1/notifications/mark-as-read/${id}`,
     DELETE: (id: string) => `/v1/notifications/delete-notification/${id}`,
+  },
+  GAMIFICATION: {
+    PROFILE: '/v1/gamification/profile',
+    ACTION: '/v1/gamification/action',
+    CHALLENGES: '/v1/gamification/challenges',
+    ACHIEVEMENTS: '/v1/gamification/achievements',
+    REWARDS: '/v1/gamification/rewards',
   },
 }; 

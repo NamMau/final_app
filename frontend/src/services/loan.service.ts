@@ -268,15 +268,72 @@ class LoanService {
     notes?: string;
   }): Promise<LoanResponse> {
     try {
+      console.log('Recording payment for loan:', loanId, 'with data:', paymentData);
+      
+      // Ensure paymentIndex is a number
+      if (paymentData.paymentIndex !== undefined && typeof paymentData.paymentIndex !== 'number') {
+        paymentData.paymentIndex = parseInt(String(paymentData.paymentIndex), 10);
+        if (isNaN(paymentData.paymentIndex)) {
+          console.error('Invalid payment index:', paymentData.paymentIndex);
+          return {
+            success: false,
+            data: {},
+            message: 'Invalid payment index'
+          };
+        }
+      }
+      
       const endpoint = ENDPOINTS.LOANS.RECORD_PAYMENT.replace('${loanID}', loanId);
-      const response = await apiService.post<LoanResponse>(endpoint, paymentData);
-      return response.data || { success: false, data: {}, message: 'No data returned' };
+      console.log('Making POST request to endpoint:', endpoint);
+      
+      const response = await apiService.post(endpoint, paymentData);
+      console.log('Record payment response:', response);
+      
+      // Handle different response structures
+      if (response) {
+        // If response has success field, use it directly
+        if (typeof (response as any).success !== 'undefined') {
+          const typedResponse = response as any;
+          if (typedResponse.success) {
+            return {
+              success: true,
+              data: typedResponse.data || {},
+              message: typedResponse.message || 'Payment recorded successfully'
+            };
+          } else {
+            return {
+              success: false,
+              data: {},
+              message: typedResponse.message || 'Failed to record payment'
+            };
+          }
+        }
+        
+        // If response has data field but no success field
+        if ((response as any).data) {
+          const typedResponse = response as any;
+          // If response.data has success field
+          if (typeof typedResponse.data.success !== 'undefined') {
+            return typedResponse.data as LoanResponse;
+          }
+          
+          // Otherwise assume success if we have data
+          return {
+            success: true,
+            data: typedResponse.data,
+            message: 'Payment recorded successfully'
+          };
+        }
+      }
+      
+      // Default fallback for unexpected response structure
+      return { success: false, data: {}, message: 'Unexpected response format' };
     } catch (error) {
       console.error('Error recording loan payment:', error);
       return {
         success: false,
         data: {},
-        message: 'Failed to record loan payment'
+        message: error instanceof Error ? error.message : 'Failed to record loan payment'
       };
     }
   }

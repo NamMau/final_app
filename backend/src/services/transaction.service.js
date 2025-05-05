@@ -1,5 +1,5 @@
 const Transaction = require('../models/Transaction.model');
-const { ObjectId } = require('mongoose').Types;
+const mongoose = require('mongoose');
 const User = require('../models/User.model');
 
 const transactionService = {
@@ -123,7 +123,7 @@ const transactionService = {
             const pipeline = [
                 {
                     $match: {
-                        user: new ObjectId(userId),
+                        user: new mongoose.Types.ObjectId(userId),
                         date: { $gte: startDate, $lte: today }
                     }
                 },
@@ -247,7 +247,7 @@ const transactionService = {
             const pipeline = [
                 {
                     $match: {
-                        user: new ObjectId(userId),
+                        user: new mongoose.Types.ObjectId(userId),
                         date: { $gte: startDate, $lte: today }
                     }
                 },

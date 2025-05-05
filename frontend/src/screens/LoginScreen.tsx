@@ -32,23 +32,59 @@ const LoginScreen = () => {
       const response = await authService.login(email, password);
       console.log('Login successful:', response);
 
-      // Show success modal
-      setShowSuccessModal(true);
-
-      // Navigate after a short delay
-      setTimeout(() => {
-        setShowSuccessModal(false);
-        try {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Dashboard' }],
-          });
-        } catch (navError) {
-          console.error('Navigation reset failed:', navError);
-          navigation.navigate('Dashboard');
+      // Đảm bảo dữ liệu người dùng đã được lưu trữ đúng cách
+      try {
+        const token = await AsyncStorage.getItem('accessToken');
+        const user = await AsyncStorage.getItem('user');
+        
+        if (!token || !user) {
+          console.error('Login successful but token or user data not stored properly');
+          throw new Error('Authentication data not stored properly');
         }
-      }, 2000);
+        
+        // Kiểm tra xem dữ liệu người dùng có hợp lệ không
+        try {
+          JSON.parse(user);
+        } catch (parseError) {
+          console.error('User data is not valid JSON:', parseError);
+          // Không ném lỗi ở đây, vẫn tiếp tục với dữ liệu hiện có
+        }
+        
+        // Show success modal
+        setShowSuccessModal(true);
 
+        // Navigate after a short delay
+        setTimeout(() => {
+          setShowSuccessModal(false);
+          try {
+            // Sử dụng navigate thay vì reset để tránh các vấn đề với navigation stack
+            navigation.navigate('Dashboard' as never);
+          } catch (navError) {
+            console.error('Navigation failed:', navError);
+            // Thử lại với cách khác nếu cách đầu tiên thất bại
+            try {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Dashboard' }],
+              });
+            } catch (resetError) {
+              console.error('Navigation reset also failed:', resetError);
+              Alert.alert(
+                'Navigation Error',
+                'Could not navigate to Dashboard. Please restart the app.',
+                [{ text: 'OK' }]
+              );
+            }
+          }
+        }, 2000);
+      } catch (storageError) {
+        console.error('Error verifying stored auth data:', storageError);
+        Alert.alert(
+          'Login Issue',
+          'Login was successful, but there was an issue storing your session. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Invalid email or password';

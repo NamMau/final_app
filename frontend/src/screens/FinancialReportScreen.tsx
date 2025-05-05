@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Alert, Modal } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,8 +9,8 @@ import { RootStackParamList } from '../navigation/types';
 import { PieChart, LineChart } from 'react-native-chart-kit';
 import { billsService } from '../services/bills.service';
 import { budgetsService } from '../services/budgets.service';
-import { transactionsService } from '../services/transactions.service';
-import { financialReportsService, CategorySpending, BudgetStatus, MonthlyData, FinancialReport } from '../services/financialReports.service';
+import { transactionsService, Transaction } from '../services/transactions.service';
+import { financialReportsService, CategorySpending, BudgetStatus, MonthlyData, FinancialReport, BudgetComparison } from '../services/financialReports.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type FinancialReportScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'FinancialReport'>;
@@ -53,6 +54,7 @@ const FinancialReportScreen = () => {
   const [categorySpending, setCategorySpending] = useState<CategorySpending[]>([]);
   const [chartCategorySpending, setChartCategorySpending] = useState<ChartCategorySpending[]>([]);
   const [budgetStatuses, setBudgetStatuses] = useState<BudgetStatus[]>([]);
+  const [budgetComparisons, setBudgetComparisons] = useState<BudgetComparison[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthlyData>({
     labels: [],
     income: [],
@@ -62,6 +64,10 @@ const FinancialReportScreen = () => {
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [balance, setBalance] = useState<number>(0);
   const [report, setReport] = useState<FinancialReport | null>(null);
+  const [unusualSpending, setUnusualSpending] = useState<{category: string; amount: number; percentageAboveAverage: number; date: string; frequency?: string; seasonalContext?: string}[]>([]);
+  const [showUnusualSpending, setShowUnusualSpending] = useState<boolean>(false);
+  const [detectingUnusualSpending, setDetectingUnusualSpending] = useState<boolean>(false);
+  const [customThreshold, setCustomThreshold] = useState<number>(150); // Default 150% threshold
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -106,6 +112,14 @@ const FinancialReportScreen = () => {
           setInsights(generatedReport.insights);
           setRecommendations(generatedReport.recommendations);
           
+          // Set budget comparisons if available
+          if (generatedReport.budgetComparisons && generatedReport.budgetComparisons.length > 0) {
+            setBudgetComparisons(generatedReport.budgetComparisons);
+          } else {
+            // Generate budget comparisons locally if not provided by backend
+            generateBudgetComparisons(generatedReport.categorySpending, generatedReport.budgetStatuses);
+          }
+          
           // Convert category spending to chart format
           const chartData = generatedReport.categorySpending.map(category => ({
             ...category,
@@ -115,22 +129,32 @@ const FinancialReportScreen = () => {
           setChartCategorySpending(chartData);
         } else {
           // Fallback to local data if backend fails
-          await Promise.all([
+          const [categories, budgets] = await Promise.all([
             loadCategorySpending(),
             loadBudgetStatuses(),
             loadMonthlyData(),
             generateInsights()
           ]);
+          
+          // Generate budget comparisons from local data
+          if (categories && budgets) {
+            generateBudgetComparisons(categories, budgets);
+          }
         }
       } catch (error) {
         console.error('Error loading financial report data:', error);
         // Fallback to local data if backend fails
-        await Promise.all([
+        const [categories, budgets] = await Promise.all([
           loadCategorySpending(),
           loadBudgetStatuses(),
           loadMonthlyData(),
           generateInsights()
         ]);
+        
+        // Generate budget comparisons from local data
+        if (categories && budgets) {
+          generateBudgetComparisons(categories, budgets);
+        }
       } finally {
         setLoading(false);
       }
@@ -140,7 +164,7 @@ const FinancialReportScreen = () => {
   }, [period]);
 
   // Load category spending data for pie chart (fallback method)
-  const loadCategorySpending = async () => {
+  const loadCategorySpending = async (): Promise<CategorySpending[]> => {
     try {
       const bills = await billsService.getBills({ 
         status: 'paid'
@@ -177,13 +201,48 @@ const FinancialReportScreen = () => {
       }));
       
       setChartCategorySpending(chartData);
+      return categoryData;
     } catch (error) {
       console.error('Error loading category spending:', error);
+      return [];
     }
   };
 
+  // Generate budget comparisons locally
+  const generateBudgetComparisons = (categories: CategorySpending[], budgets: BudgetStatus[]) => {
+    try {
+      // Create a map of category spending
+      const categorySpendingMap = new Map<string, number>();
+      categories.forEach(category => {
+        categorySpendingMap.set(category.name, category.amount);
+      });
+      
+      // Create budget comparisons
+      const comparisons: BudgetComparison[] = budgets.map((budget, index) => {
+        const categoryName = budget.name;
+        const budgetAmount = budget.total;
+        const actualSpent = budget.spent;
+        const difference = budgetAmount - actualSpent;
+        const percentageOfBudget = (actualSpent / budgetAmount) * 100;
+        
+        return {
+          categoryName,
+          budgetAmount,
+          actualSpent,
+          difference,
+          percentageOfBudget,
+          color: COLORS[index % COLORS.length]
+        };
+      });
+      
+      setBudgetComparisons(comparisons);
+    } catch (error) {
+      console.error('Error generating budget comparisons:', error);
+    }
+  };
+  
   // Load budget statuses
-  const loadBudgetStatuses = async () => {
+  const loadBudgetStatuses = async (): Promise<BudgetStatus[]> => {
     try {
       const budgets = await budgetsService.getBudgets();
       
@@ -197,8 +256,10 @@ const FinancialReportScreen = () => {
       .slice(0, 5); // Top 5 budgets by percentage spent
       
       setBudgetStatuses(statuses);
+      return statuses;
     } catch (error) {
       console.error('Error loading budget statuses:', error);
+      return [];
     }
   };
 
@@ -353,6 +414,7 @@ const FinancialReportScreen = () => {
           period,
           categorySpending,
           budgetStatuses,
+          budgetComparisons,
           monthlyData,
           balance
         });
@@ -394,6 +456,46 @@ const FinancialReportScreen = () => {
     }
   };
 
+  // Detect unusual spending patterns
+  const detectUnusualSpending = useCallback(async () => {
+    try {
+      setDetectingUnusualSpending(true);
+      
+      // Get the date range for analysis (last 6 months)
+      const today = new Date();
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(today.getMonth() - 6);
+      const startDate = sixMonthsAgo.toISOString().split('T')[0];
+      const endDate = today.toISOString().split('T')[0];
+      
+      // Call the backend service to detect unusual spending
+      const response = await financialReportsService.detectUnusualSpending({
+        startDate,
+        endDate,
+        threshold: customThreshold,
+        includeSeasonalContext: true
+      });
+      
+      if (!response.success) {
+        Alert.alert('Error', response.message || 'Failed to detect unusual spending patterns');
+        return;
+      }
+      
+      if (response.data.unusualTransactions.length === 0) {
+        Alert.alert('No Unusual Spending', 'No unusual spending patterns were detected with the current threshold.');
+        return;
+      }
+      
+      setUnusualSpending(response.data.unusualTransactions);
+      setShowUnusualSpending(true);
+    } catch (error) {
+      console.error('Error detecting unusual spending:', error);
+      Alert.alert('Error', 'Failed to detect unusual spending patterns');
+    } finally {
+      setDetectingUnusualSpending(false);
+    }
+  }, [customThreshold]);
+  
   // Save the current report to the database
   const saveReport = async () => {
     try {
@@ -479,13 +581,20 @@ const FinancialReportScreen = () => {
           <Ionicons name="arrow-back" size={24} color="#1F41BB" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Financial Report</Text>
-        <TouchableOpacity onPress={saveReport} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator size="small" color="#1F41BB" />
-          ) : (
-            <Ionicons name="save-outline" size={24} color="#1F41BB" />
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            onPress={detectUnusualSpending} 
+            style={[styles.actionButton, styles.detectButton]}
+            disabled={detectingUnusualSpending}
+          >
+            <Text style={styles.actionButtonText}>
+              {detectingUnusualSpending ? 'Detecting...' : 'Detect Unusual'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={saveReport} disabled={saving} style={[styles.actionButton, styles.saveButton]}>
+            <Text style={styles.actionButtonText}>{saving ? 'Saving...' : 'Save'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Period Selector */}
@@ -510,6 +619,170 @@ const FinancialReportScreen = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Unusual Spending Modal */}
+      <Modal
+        visible={showUnusualSpending}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowUnusualSpending(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Unusual Spending Detected</Text>
+              <TouchableOpacity onPress={() => setShowUnusualSpending(false)}>
+                <Text style={styles.closeButton}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.thresholdContainer}>
+              <Text style={styles.thresholdLabel}>Sensitivity: {customThreshold}%</Text>
+              <View style={styles.thresholdSliderContainer}>
+                <Text style={styles.thresholdMin}>Low</Text>
+                <Slider
+                  style={styles.thresholdSlider}
+                  minimumValue={120}
+                  maximumValue={200}
+                  step={5}
+                  value={customThreshold}
+                  onValueChange={(value: number) => setCustomThreshold(value)}
+                  onSlidingComplete={() => detectUnusualSpending()}
+                  minimumTrackTintColor="#9c27b0"
+                  maximumTrackTintColor="#d3d3d3"
+                  thumbTintColor="#9c27b0"
+                />
+                <Text style={styles.thresholdMax}>High</Text>
+              </View>
+              <Text style={styles.thresholdHint}>
+                Transactions above {customThreshold}% of category average are considered unusual
+              </Text>
+              <Text style={styles.thresholdNote}>
+                Move slider and release to re-analyze with new threshold
+              </Text>
+            </View>
+            
+            <ScrollView style={styles.modalScrollView}>
+              {unusualSpending.length > 0 ? (
+                unusualSpending.map((item, index) => (
+                  <View key={index} style={styles.unusualItem}>
+                    <View style={styles.unusualItemHeader}>
+                      <Text style={styles.unusualCategory}>{item.category}</Text>
+                      <Text style={styles.unusualPercentage}>
+                        +{Math.round(item.percentageAboveAverage)}% above average
+                      </Text>
+                    </View>
+                    <View style={styles.unusualItemDetails}>
+                      <Text style={styles.unusualAmount}>{formatCurrency(item.amount)}</Text>
+                      <Text style={styles.unusualDate}>
+                        {new Date(item.date).toLocaleDateString('vi-VN')}
+                      </Text>
+                    </View>
+                    {item.seasonalContext && (
+                      <View style={styles.contextContainer}>
+                        <Text style={styles.contextLabel}>
+                          <Ionicons name="calendar-outline" size={14} color="#666" /> {item.seasonalContext}
+                        </Text>
+                      </View>
+                    )}
+                    {item.frequency && (
+                      <View style={styles.contextContainer}>
+                        <Text style={styles.contextLabel}>
+                          <Ionicons name="repeat-outline" size={14} color="#666" /> {item.frequency}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.unusualItemBar}>
+                      <View 
+                        style={[styles.unusualItemBarFill, 
+                          { width: `${Math.min(item.percentageAboveAverage, 300)}%` }
+                        ]} 
+                      />
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.noUnusualContainer}>
+                  <Text style={styles.noUnusualText}>No unusual spending patterns detected</Text>
+                  <Text style={styles.noUnusualSubtext}>
+                    Your spending appears to be consistent with your historical patterns
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+            
+            {unusualSpending.length > 0 && (
+              <View style={styles.unusualSummary}>
+                <Text style={styles.unusualSummaryText}>
+                  {unusualSpending.length} unusual transaction{unusualSpending.length !== 1 ? 's' : ''} detected
+                </Text>
+                <Text style={styles.unusualSummarySubtext}>
+                  These transactions are significantly higher than your typical spending in these categories
+                </Text>
+                
+                {/* Generate insights about unusual spending */}
+                {unusualSpending.length > 0 && (
+                  <View style={styles.insightsContainer}>
+                    <Text style={styles.insightsTitle}>Insights:</Text>
+                    <View style={styles.insightsList}>
+                      {/* Most affected category */}
+                      {(() => {
+                        // Group by category and find the one with most unusual transactions
+                        const categoryCount = new Map<string, number>();
+                        unusualSpending.forEach(item => {
+                          categoryCount.set(item.category, (categoryCount.get(item.category) || 0) + 1);
+                        });
+                        
+                        const mostAffectedCategory = Array.from(categoryCount.entries())
+                          .sort((a, b) => b[1] - a[1])[0];
+                          
+                        if (mostAffectedCategory) {
+                          return (
+                            <Text style={styles.unusualInsightItem}>
+                              <Ionicons name="alert-circle" size={14} color="#e74c3c" /> 
+                              {mostAffectedCategory[0]} has the most unusual transactions ({mostAffectedCategory[1]})
+                            </Text>
+                          );
+                        }
+                        return null;
+                      })()}
+                      
+                      {/* Seasonal patterns */}
+                      {(() => {
+                        const seasonalItems = unusualSpending.filter(item => item.seasonalContext);
+                        if (seasonalItems.length > 0) {
+                          return (
+                            <Text style={styles.unusualInsightItem}>
+                              <Ionicons name="calendar" size={14} color="#3498db" /> 
+                              {seasonalItems.length} unusual transaction{seasonalItems.length !== 1 ? 's' : ''} occurred during seasonal periods
+                            </Text>
+                          );
+                        }
+                        return null;
+                      })()}
+                      
+                      {/* Highest deviation */}
+                      {(() => {
+                        const highestDeviation = unusualSpending.reduce(
+                          (max, item) => item.percentageAboveAverage > max.percentageAboveAverage ? item : max, 
+                          unusualSpending[0]
+                        );
+                        
+                        return (
+                          <Text style={styles.unusualInsightItem}>
+                            <Ionicons name="trending-up" size={14} color="#e67e22" /> 
+                            Highest deviation: {highestDeviation.category} at +{Math.round(highestDeviation.percentageAboveAverage)}% above average
+                          </Text>
+                        );
+                      })()}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+      
       <ScrollView style={styles.scrollView}>
         {/* Spending by Category */}
         <View style={styles.section}>
@@ -561,6 +834,62 @@ const FinancialReportScreen = () => {
             ))
           ) : (
             <Text style={styles.noDataText}>No budget data available</Text>
+          )}
+        </View>
+        
+        {/* Budget vs Actual Spending */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Budget vs Actual Spending</Text>
+          {budgetComparisons.length > 0 ? (
+            budgetComparisons.map((comparison, index) => (
+              <View key={index} style={styles.comparisonItem}>
+                <View style={styles.comparisonHeader}>
+                  <Text style={styles.comparisonName}>{comparison.categoryName}</Text>
+                  <Text 
+                    style={[styles.comparisonPercentage, 
+                      comparison.percentageOfBudget > 100 ? styles.overBudgetText : 
+                      comparison.percentageOfBudget > 90 ? styles.nearBudgetText : 
+                      styles.underBudgetText
+                    ]}
+                  >
+                    {comparison.percentageOfBudget.toFixed(0)}%
+                  </Text>
+                </View>
+                <View style={styles.comparisonDetails}>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonLabel}>Budget:</Text>
+                    <Text style={styles.comparisonValue}>{formatCurrency(comparison.budgetAmount)}</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonLabel}>Actual:</Text>
+                    <Text style={styles.comparisonValue}>{formatCurrency(comparison.actualSpent)}</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonLabel}>Difference:</Text>
+                    <Text 
+                      style={[styles.comparisonValue, 
+                        comparison.difference < 0 ? styles.negativeAmount : styles.positiveAmount
+                      ]}
+                    >
+                      {comparison.difference < 0 ? '-' : '+'}{formatCurrency(Math.abs(comparison.difference))}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View 
+                    style={[
+                      styles.progressBar, 
+                      { width: `${Math.min(comparison.percentageOfBudget, 100)}%` },
+                      comparison.percentageOfBudget > 100 ? styles.overBudgetBar : 
+                      comparison.percentageOfBudget > 90 ? styles.nearBudgetBar : 
+                      styles.underBudgetBar
+                    ]} 
+                  />
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.noDataText}>No budget comparison data available</Text>
           )}
         </View>
 
@@ -627,7 +956,282 @@ const FinancialReportScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create({  
+  // Unusual spending detection styles
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: '#1F41BB',
+  },
+  detectButton: {
+    backgroundColor: '#9c27b0',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  modalScrollView: {
+    maxHeight: 350,
+  },
+  thresholdContainer: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#f9f9f9',
+  },
+  thresholdLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+  },
+  thresholdSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  thresholdSlider: {
+    flex: 1,
+    height: 40,
+  },
+  thresholdMin: {
+    width: 30,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  thresholdMax: {
+    width: 30,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  thresholdHint: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  thresholdNote: {
+    fontSize: 11,
+    color: '#9c27b0',
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  unusualItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  unusualItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  unusualCategory: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  unusualPercentage: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+  },
+  unusualItemDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  unusualAmount: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  unusualDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  contextContainer: {
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  contextLabel: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  unusualItemBar: {
+    height: 6,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  unusualItemBarFill: {
+    height: '100%',
+    backgroundColor: '#e74c3c',
+  },
+  noUnusualContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noUnusualText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#27ae60',
+    marginBottom: 8,
+  },
+  noUnusualSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  unusualSummary: {
+    padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#f9f9f9',
+  },
+  unusualSummaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  unusualSummarySubtext: {
+    fontSize: 14,
+    color: '#666',
+  },
+  insightsContainer: {
+    marginTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 10,
+  },
+  insightsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  insightsList: {
+    marginLeft: 5,
+  },
+  unusualInsightItem: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  
+  // Budget comparison styles
+  comparisonItem: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  comparisonName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  comparisonPercentage: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  comparisonDetails: {
+    marginBottom: 10,
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  comparisonLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  comparisonValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  overBudgetText: {
+    color: '#e74c3c',
+  },
+  nearBudgetText: {
+    color: '#f39c12',
+  },
+  underBudgetText: {
+    color: '#27ae60',
+  },
+  positiveAmount: {
+    color: '#27ae60',
+  },
+  negativeAmount: {
+    color: '#e74c3c',
+  },
+  overBudgetBar: {
+    backgroundColor: '#e74c3c',
+  },
+  nearBudgetBar: {
+    backgroundColor: '#f39c12',
+  },
+  underBudgetBar: {
+    backgroundColor: '#27ae60',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',

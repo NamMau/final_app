@@ -3,15 +3,19 @@ import { apiService } from './api';
 import { authService } from './auth.service';
 
 export interface Notification {
-  _id: string;
-  userId: string;
+  _id?: string;
+  id?: string; // Support both id formats
+  userId?: string;
+  title?: string;
   message: string;
-  type: 'budget_alert' | 'bill_due' | 'goal_achieved' | 'loan_payment' | 'system';
-  priority: 'low' | 'medium' | 'high';
-  status: 'read' | 'unread';
+  type: 'budget_alert' | 'bill_due' | 'goal_achieved' | 'loan_payment' | 'system' | 'transaction' | 'budget' | 'goal' | 'gamification';
+  priority?: 'low' | 'medium' | 'high';
+  status?: 'read' | 'unread';
+  read?: boolean; // Alternative read status format
   link?: string;
-  createdAt: string;
-  updatedAt: string;
+  data?: any; // For additional data like transactionId, etc.
+  createdAt: string | Date;
+  updatedAt?: string;
 }
 
 export interface NotificationResponse {

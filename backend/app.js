@@ -68,6 +68,7 @@ const corsOptions = {
       'https://3897-2001-ee0-8209-1109-28d5-8e30-9009-854d.ngrok-free.app',
       'https://f00d-2001-ee0-8209-1109-28d5-8e30-9009-854d.ngrok-free.app/api',
       'https://3367-2001-ee0-8209-1109-99-2f89-e0a2-59b8.ngrok-free.app',
+      'https://9b05-2402-800-61b3-8662-bc94-8893-c22b-84bb.ngrok-free.app/api',
       'http://y7evpj4-anonymous-4000.exp.direct',
       'exp://y7evpj4-anonymous-4000.exp.direct'
     ];

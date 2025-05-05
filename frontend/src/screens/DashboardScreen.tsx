@@ -9,6 +9,7 @@ import { RootStackParamList } from '../navigation/types';
 import { transactionsService, TransactionStats } from '../services/transactions.service';
 import { BarChart } from 'react-native-chart-kit';
 import notificationService, { Notification } from '../services/notification.service';
+import { spendingOptimizationService, SpendingRecommendation } from '../services/spendingOptimization.service';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 
@@ -67,6 +68,9 @@ const DashboardScreen = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [spendingRecommendations, setSpendingRecommendations] = useState<SpendingRecommendation[]>([]);
+  const [selectedRecommendation, setSelectedRecommendation] = useState<SpendingRecommendation | null>(null);
+  const [showRecommendationDetail, setShowRecommendationDetail] = useState<boolean>(false);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -107,14 +111,15 @@ const DashboardScreen = () => {
   // Mark notification as read
   const handleNotificationPress = async (notification: Notification) => {
     try {
-      if (notification.status === 'unread') {
-        await notificationService.markAsRead(notification._id);
+      if (notification.status === 'unread' && notification._id) {
+        await notificationService.markAsRead(notification._id.toString());
         loadNotifications(); // Reload to update unread count
       }
       
       // Navigate to the linked screen if available
       if (notification.link) {
         setShowNotifications(false);
+        // Parse the link to get screen name and params
         const parts = notification.link.split('/');
         const screenName = parts[0];
         const params = parts.length > 1 ? { id: parts[1] } : undefined;
@@ -130,8 +135,26 @@ const DashboardScreen = () => {
         }
       }
     } catch (error) {
-      console.error('Error handling notification:', error);
+      console.error('Error handling notification press:', error);
+      Alert.alert('Error', 'Failed to process notification');
     }
+  };
+  
+  // Load spending optimization recommendations
+  const loadSpendingOptimizations = async () => {
+    try {
+      const recommendations = await spendingOptimizationService.getRecommendations();
+      console.log('Spending recommendations loaded:', recommendations.length);
+      setSpendingRecommendations(recommendations);
+    } catch (error) {
+      console.error('Error loading spending optimizations:', error);
+    }
+  };
+  
+  // Handle recommendation press
+  const handleRecommendationPress = (recommendation: SpendingRecommendation) => {
+    setSelectedRecommendation(recommendation);
+    setShowRecommendationDetail(true);
   };
 
   // Load balance and stats when screen is focused
@@ -159,6 +182,7 @@ const DashboardScreen = () => {
   useEffect(() => {
     loadBalance();
     loadNotifications();
+    loadSpendingOptimizations();
     const fetchStats = async () => {
       try {
         const data = await transactionsService.getTransactionStats(selectedPeriod);
@@ -338,8 +362,109 @@ const DashboardScreen = () => {
             </View>
           ) : null}
         </View>
+
+        {/* Spending Optimization */}
+        <View style={styles.spendingCard}>
+          <Text style={styles.spendingTitle}>Spending Optimization</Text>
+          <Text style={styles.spendingSubtitle}>Recommendations to save money</Text>
+          
+          {spendingRecommendations.length > 0 ? (
+            <View style={styles.recommendationsContainer}>
+              {spendingRecommendations.map((recommendation, index) => (
+                <TouchableOpacity 
+                  key={recommendation.id || index.toString()}
+                  style={styles.recommendationCard}
+                  onPress={() => handleRecommendationPress(recommendation)}
+                >
+                  <View style={[styles.recommendationIcon, { backgroundColor: recommendation.color || '#1F41BB' }]}>
+                    <Ionicons name={recommendation.icon as any || 'cash-outline'} size={24} color="#FFF" />
+                  </View>
+                  <View style={styles.recommendationContent}>
+                    <Text style={styles.recommendationTitle}>{recommendation.title}</Text>
+                    <Text style={styles.recommendationSavings}>Save up to {formatCurrency(recommendation.potentialSavings)}</Text>
+                    <View style={styles.recommendationMeta}>
+                      <Text style={styles.recommendationDifficulty}>
+                        {recommendation.implementationDifficulty === 'easy' ? '🟢 Easy' : 
+                         recommendation.implementationDifficulty === 'medium' ? '🟡 Medium' : '🔴 Hard'}
+                      </Text>
+                      <Text style={styles.recommendationCategory}>{recommendation.category || 'General'}</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#666" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyRecommendations}>
+              <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
+              <Text style={styles.emptyText}>No recommendations available. Your spending looks optimized!</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
+      {/* Recommendation Detail Modal */}
+      <Modal
+        visible={showRecommendationDetail}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowRecommendationDetail(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.notificationModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Optimization Details</Text>
+              <TouchableOpacity onPress={() => setShowRecommendationDetail(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedRecommendation && (
+              <ScrollView style={styles.recommendationDetailScroll}>
+                <View style={[styles.recommendationDetailIcon, { backgroundColor: selectedRecommendation.color || '#1F41BB' }]}>
+                  <Ionicons name={selectedRecommendation.icon as any || 'cash-outline'} size={40} color="#FFF" />
+                </View>
+                
+                <Text style={styles.recommendationDetailTitle}>{selectedRecommendation.title}</Text>
+                
+                <View style={styles.recommendationDetailMeta}>
+                  <View style={styles.recommendationDetailMetaItem}>
+                    <Ionicons name="cash-outline" size={16} color="#666" />
+                    <Text style={styles.recommendationDetailMetaText}>Potential Savings: {formatCurrency(selectedRecommendation.potentialSavings)}</Text>
+                  </View>
+                  
+                  <View style={styles.recommendationDetailMetaItem}>
+                    <Ionicons name="speedometer-outline" size={16} color="#666" />
+                    <Text style={styles.recommendationDetailMetaText}>
+                      Difficulty: {selectedRecommendation.implementationDifficulty === 'easy' ? '🟢 Easy' : 
+                      selectedRecommendation.implementationDifficulty === 'medium' ? '🟡 Medium' : '🔴 Hard'}
+                    </Text>
+                  </View>
+                  
+                  {selectedRecommendation.category && (
+                    <View style={styles.recommendationDetailMetaItem}>
+                      <Ionicons name="pricetag-outline" size={16} color="#666" />
+                      <Text style={styles.recommendationDetailMetaText}>Category: {selectedRecommendation.category}</Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.recommendationDetailMetaItem}>
+                    <Ionicons name="trending-up-outline" size={16} color="#666" />
+                    <Text style={styles.recommendationDetailMetaText}>Relevance Score: {selectedRecommendation.relevanceScore}/100</Text>
+                  </View>
+                </View>
+                
+                <Text style={styles.recommendationDetailDescription}>{selectedRecommendation.description}</Text>
+                
+                <TouchableOpacity style={styles.implementButton}>
+                  <Text style={styles.implementButtonText}>Implement This Recommendation</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+      
       {/* Notifications Modal */}
       <Modal
         visible={showNotifications}
@@ -359,7 +484,7 @@ const DashboardScreen = () => {
             {notifications.length > 0 ? (
               <FlatList
                 data={notifications}
-                keyExtractor={(item) => item._id}
+                keyExtractor={(item) => item._id ? item._id.toString() : Math.random().toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity 
                     style={[
@@ -699,6 +824,122 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: -28,
+  },
+  // Spending Optimization Styles
+  recommendationsContainer: {
+    marginTop: 16,
+  },
+  recommendationCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  recommendationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  recommendationContent: {
+    flex: 1,
+  },
+  recommendationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  recommendationSavings: {
+    fontSize: 14,
+    color: '#4CAF50',
+    marginBottom: 4,
+  },
+  recommendationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recommendationDifficulty: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 8,
+  },
+  recommendationCategory: {
+    fontSize: 12,
+    color: '#666',
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  emptyRecommendations: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  // Recommendation Detail Styles
+  recommendationDetailScroll: {
+    padding: 16,
+  },
+  recommendationDetailIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  recommendationDetailTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  recommendationDetailMeta: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  recommendationDetailMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recommendationDetailMetaText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
+  recommendationDetailDescription: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  implementButton: {
+    backgroundColor: '#1F41BB',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  implementButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

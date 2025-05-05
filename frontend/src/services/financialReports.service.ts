@@ -12,12 +12,23 @@ export interface BudgetStatus {
   spent: number;
   total: number;
   percentage: number;
+  categoryID?: string;
+  color?: string;
 }
 
 export interface MonthlyData {
   labels: string[];
   income: number[];
   expenses: number[];
+}
+
+export interface BudgetComparison {
+  categoryName: string;
+  budgetAmount: number;
+  actualSpent: number;
+  difference: number;
+  percentageOfBudget: number;
+  color: string;
 }
 
 export interface FinancialReport {
@@ -27,6 +38,7 @@ export interface FinancialReport {
   period: 'week' | 'month' | 'year';
   categorySpending: CategorySpending[];
   budgetStatuses: BudgetStatus[];
+  budgetComparisons?: BudgetComparison[];
   monthlyData: MonthlyData;
   insights: string[];
   recommendations: string[];
@@ -45,6 +57,26 @@ export interface FinancialReportResponse {
 export interface FinancialReportsListResponse {
   success: boolean;
   data: FinancialReport[];
+}
+
+export interface UnusualSpending {
+  category: string;
+  amount: number;
+  percentageAboveAverage: number;
+  date: string;
+  frequency?: string;
+  seasonalContext?: string;
+}
+
+export interface UnusualSpendingData {
+  unusualTransactions: UnusualSpending[];
+  insights: string[];
+}
+
+export interface UnusualSpendingResponse {
+  success: boolean;
+  data: UnusualSpendingData;
+  message: string;
 }
 
 export interface ApiResponse<T> {
@@ -112,6 +144,7 @@ export const financialReportsService = {
     period: string;
     categorySpending: CategorySpending[];
     budgetStatuses: BudgetStatus[];
+    budgetComparisons?: BudgetComparison[];
     monthlyData: MonthlyData;
     balance: number;
   }): Promise<ApiResponse<{ insights: string[]; recommendations: string[] }>> {
@@ -144,6 +177,58 @@ export const financialReportsService = {
           insights: ['Failed to generate insights'],
           recommendations: ['Please try again later']
         }
+      };
+    }
+  },
+
+  /**
+   * Detect unusual spending patterns based on historical data
+   * @param params Parameters for unusual spending detection
+   * @returns Unusual spending transactions and insights
+   */
+  async detectUnusualSpending(params: {
+    startDate: string;
+    endDate: string;
+    threshold: number;
+    includeSeasonalContext?: boolean;
+  }): Promise<UnusualSpendingResponse> {
+    try {
+      const response = await apiService.post(
+        `${ENDPOINTS.FINANCIAL_REPORTS.BASE}/unusual-spending`,
+        params
+      );
+      
+      if (!response.success) {
+        console.error('Error detecting unusual spending:', response.message);
+        return {
+          success: false,
+          data: {
+            unusualTransactions: [],
+            insights: []
+          },
+          message: response.message || 'Failed to detect unusual spending'
+        };
+      }
+      
+      const responseData = response.data as UnusualSpendingData;
+      
+      return {
+        success: true,
+        data: responseData || {
+          unusualTransactions: [],
+          insights: []
+        },
+        message: response.message || 'Successfully detected unusual spending'
+      };
+    } catch (error) {
+      console.error('Error detecting unusual spending:', error);
+      return {
+        success: false,
+        data: {
+          unusualTransactions: [],
+          insights: []
+        },
+        message: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
