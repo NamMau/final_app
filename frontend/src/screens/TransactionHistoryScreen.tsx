@@ -41,15 +41,17 @@ export default function TransactionHistoryScreen() {
       });
       
       console.log('Transactions loaded:', transactionsData);
-      if (Array.isArray(transactionsData)) {
-        setTransactions(transactionsData);
-        console.log('Number of transactions:', transactionsData.length);
-      } else {
-        console.error('Transactions data is not an array:', transactionsData);
-        setTransactions([]);
+      console.log('Number of transactions:', transactionsData.length);
+      
+      // Set transactions state with the data
+      setTransactions(transactionsData || []);
+      
+      if (transactionsData.length === 0) {
+        console.log('No transactions found for the selected period');
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      setTransactions([]); // Set empty array on error
     } finally {
       setIsLoading(false);
     }

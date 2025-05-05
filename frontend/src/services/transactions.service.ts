@@ -47,23 +47,25 @@ export const transactionsService = {
       const url = `${ENDPOINTS.TRANSACTIONS.GET_ALL}${queryParams ? `?${queryParams}` : ''}`;
       console.log('Fetching transactions from URL:', url);
       
-      const response = await apiService.get<Transaction[]>(url);
-      console.log('Raw API response:', response?.data);
+      const response = await apiService.get<{success: boolean, data: Transaction[]}>(url);
+      console.log('Raw API response:', response);
       
       // Check if response has data
-      if (!response?.data) {
-        console.error('No response data received');
+      if (!response?.success || !response?.data) {
+        console.error('No response data received or unsuccessful response');
         return [];
       }
 
-      // Ensure data is an array
+      // The backend returns { success: true, data: [...transactions] }
+      // Extract the data array from the response
       const transactions = response.data;
       if (!Array.isArray(transactions)) {
-        console.error('Response is not an array:', transactions);
+        console.error('Response data is not an array:', transactions);
         return [];
       }
 
       console.log('Parsed transactions:', transactions);
+      console.log('Number of transactions:', transactions.length);
       return transactions;
     } catch (error) {
       console.error('Error getting transactions:', error);
@@ -76,20 +78,23 @@ export const transactionsService = {
       const url = `${ENDPOINTS.TRANSACTIONS.STATS}?period=${period}`;
       console.log('Fetching transaction stats from URL:', url);
       
-      const response = await apiService.get<TransactionStats[]>(url);
-      console.log('Raw stats API response:', response?.data);
+      const response = await apiService.get<{success: boolean, data: TransactionStats[]}>(url);
+      console.log('Raw stats API response:', response);
       
-      if (!response?.data) {
-        console.error('No stats data received');
+      if (!response?.success || !response?.data) {
+        console.error('No stats data received or unsuccessful response');
         return [];
       }
       
-      if (!Array.isArray(response.data)) {
-        console.error('Stats response is not an array:', response.data);
+      // The backend returns { success: true, data: [...stats] }
+      const stats = response.data;
+      if (!Array.isArray(stats)) {
+        console.error('Stats response data is not an array:', stats);
         return [];
       }
       
-      return response.data;
+      console.log('Number of stat entries:', stats.length);
+      return stats;
     } catch (error) {
       console.error('Error getting transaction stats:', error);
       return [];
@@ -99,13 +104,26 @@ export const transactionsService = {
   // Get monthly income and expense stats
   async getMonthlyStats(period: 'week' | 'month' | 'year' = 'month'): Promise<MonthlyStats[]> {
     try {
-      const response = await apiService.get<MonthlyStats[]>(`${ENDPOINTS.TRANSACTIONS.STATS}/monthly?period=${period}`);
+      const url = `${ENDPOINTS.TRANSACTIONS.STATS}/monthly?period=${period}`;
+      console.log('Fetching monthly stats from URL:', url);
       
-      if (!response?.data) {
+      const response = await apiService.get<{success: boolean, data: MonthlyStats[]}>(`${ENDPOINTS.TRANSACTIONS.STATS}/monthly?period=${period}`);
+      console.log('Raw monthly stats response:', response);
+      
+      if (!response?.success || !response?.data) {
+        console.error('No monthly stats data received or unsuccessful response');
         return [];
       }
       
-      return response.data;
+      // The backend returns { success: true, data: [...stats] }
+      const stats = response.data;
+      if (!Array.isArray(stats)) {
+        console.error('Monthly stats response data is not an array:', stats);
+        return [];
+      }
+      
+      console.log('Number of monthly stat entries:', stats.length);
+      return stats;
     } catch (error) {
       console.error('Error fetching monthly stats:', error);
       

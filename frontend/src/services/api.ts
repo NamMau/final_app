@@ -1,6 +1,10 @@
 import { API_URL, API_KEY } from '../config/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Define HeadersInit type if it's not available in the environment
+type HeadersInit_ = Headers | string[][] | Record<string, string>;
+type HeadersInit = HeadersInit_;
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -15,10 +19,11 @@ interface ApiError {
 
 // Default retry configuration
 const DEFAULT_RETRY_CONFIG = {
-  maxRetries: 3,
+  maxRetries: 5,         // Increased retries for tunnel connections
   initialDelayMs: 1000, // Start with 1 second delay
-  maxDelayMs: 10000,    // Maximum delay of 10 seconds
+  maxDelayMs: 15000,    // Maximum delay of 15 seconds
   backoffFactor: 2,     // Exponential backoff factor
+  requestTimeout: 60000, // 60 seconds timeout for tunnel connections
 };
 
 class ApiService {
@@ -27,7 +32,9 @@ class ApiService {
   private async getHeaders() {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-api-key': API_KEY
+      'x-api-key': API_KEY,
+      'Accept': '*/*',  // Accept any content type
+      'Connection': 'keep-alive'  // Use persistent connections
     };
 
     const accessToken = await AsyncStorage.getItem('accessToken');
@@ -121,31 +128,56 @@ class ApiService {
   //   } catch (error: unknown) {
   //     console.error('GET request error:', error);
   //     return { success: false, message: 'Failed to fetch data', data: undefined };
-  //   }
-  // }
-  async get<T>(endpoint: string, params?: Record<string, string | number | boolean>): Promise<ApiResponse<T>> {
+  async get<T>(endpoint: string, params?: Record<string, string | number | boolean>, customRetryConfig?: Partial<typeof DEFAULT_RETRY_CONFIG>): Promise<ApiResponse<T>> {
+    // Merge default config with custom config if provided
+    const retryConfig = {
+      ...DEFAULT_RETRY_CONFIG,
+      ...customRetryConfig
+    };
+    
     let attempt = 0;
-    let delay = DEFAULT_RETRY_CONFIG.initialDelayMs;
+    let delay = retryConfig.initialDelayMs;
+    
+    // Add query parameters if provided
+    let queryString = '';
+    if (params) {
+      queryString = '?' + Object.entries(params)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+        .join('&');
+    }
     
     while (attempt <= DEFAULT_RETRY_CONFIG.maxRetries) {
+      const url = `${this.baseURL}${endpoint}${queryString}`;
+      console.log(`Making GET request to: ${url} (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries + 1})`);
+      console.log(`Current API_URL: ${API_URL}`);
+      const headers = await this.getHeaders();
+      console.log('Request headers:', JSON.stringify(headers));
+      
       try {
-        let url = `${this.baseURL}${endpoint}`;
-        if (params) {
-          const stringParams: Record<string, string> = Object.fromEntries(
-            Object.entries(params).map(([key, value]) => [key, String(value)])
-          );
-          const queryString = new URLSearchParams(stringParams).toString();
-          url += `?${queryString}`;
-        }
-
-        console.log(`Making GET request to: ${url} (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries + 1})`);
-        const headers = await this.getHeaders();
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers
+        console.log(`Starting fetch with ${DEFAULT_RETRY_CONFIG.requestTimeout}ms timeout`);
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise<Response>((_, reject) => {
+          setTimeout(() => {
+            console.warn(`Request to ${url} timed out after ${DEFAULT_RETRY_CONFIG.requestTimeout}ms`);
+            reject(new Error('Request timeout'));
+          }, DEFAULT_RETRY_CONFIG.requestTimeout);
         });
 
+        // Create the fetch promise
+        const fetchPromise = fetch(url, {
+          method: 'GET',
+          headers
+        }).then(response => {
+          console.log(`Received response from ${url} with status: ${response.status}`);
+          return response;
+        }).catch(error => {
+          console.error(`Fetch error for ${url}:`, error.message);
+          throw error;
+        });
+
+        // Race the fetch against the timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
         console.log('GET response status:', response.status);
         
         // If we get a rate limit error, retry with backoff
@@ -163,8 +195,21 @@ class ApiService {
         }
         
         return this.handleResponse<T>(response, { url, method: 'GET', headers });
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('GET request error:', error);
+        
+        // Handle timeout errors
+        if (error instanceof Error && error.message === 'Request timeout') {
+          console.error('Request timed out');
+          if (attempt < DEFAULT_RETRY_CONFIG.maxRetries) {
+            console.log(`Retrying after timeout (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay = Math.min(delay * DEFAULT_RETRY_CONFIG.backoffFactor, DEFAULT_RETRY_CONFIG.maxDelayMs);
+            attempt++;
+            continue;
+          }
+          throw { message: 'Request timed out. Please check your network connection and server status.', status: 408 };
+        }
         
         // If it's a rate limit error that we're handling with retries
         if (typeof error === 'object' && error !== null && 'status' in error && (error as any).status === 429) {
@@ -202,62 +247,100 @@ class ApiService {
     
     while (attempt <= DEFAULT_RETRY_CONFIG.maxRetries) {
       const url = `${this.baseURL}${endpoint}`;
+      console.log(`POST request to: ${url}`);
+      console.log(`API_URL from constants: ${API_URL}`);
       const headers = await this.getHeaders();
+      console.log('Using headers:', JSON.stringify(headers));
       
-      // Set up timeout/abort
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
-      let rawResponse: Response;
       try {
-        // If data is FormData, don't set Content-Type (browser will set it with boundary)
-        if (data instanceof FormData) {
-          delete headers['Content-Type'];
-        }
-        
         console.log(`Making POST request to: ${url} (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries + 1})`);
         
-        rawResponse = await fetch(url, {
+        // Create a timeout promise
+        const timeoutPromise = new Promise<Response>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Request timeout'));
+          }, DEFAULT_RETRY_CONFIG.requestTimeout);
+        });
+
+        // Create the fetch promise with better error handling
+        const fetchPromise = fetch(url, {
           method: 'POST',
           headers,
-          body: data instanceof FormData ? data : JSON.stringify(data),
-          signal: controller.signal
+          body: data instanceof FormData ? data : JSON.stringify(data)
+        }).then(response => {
+          console.log(`Received response from ${url} with status: ${response.status}`);
+          return response;
+        }).catch(error => {
+          console.error(`Fetch error for ${url}:`, error.message);
+          throw error;
         });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+
+        // Race the fetch against the timeout
+        console.log(`Waiting for response with ${DEFAULT_RETRY_CONFIG.requestTimeout}ms timeout...`);
+        const rawResponse = await Promise.race([fetchPromise, timeoutPromise]) as Response;
       
-      // If we get a rate limit error, retry with backoff
-      if (rawResponse.status === 429) {
-        if (attempt === DEFAULT_RETRY_CONFIG.maxRetries) {
-          console.error(`Max retries (${DEFAULT_RETRY_CONFIG.maxRetries}) reached for rate-limited request`);
-          throw { message: "Rate limit exceeded. Please try again later.", status: 429 };
-        }
-        
-        console.log(`Rate limit hit. Retrying after ${delay}ms delay...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay = Math.min(delay * DEFAULT_RETRY_CONFIG.backoffFactor, DEFAULT_RETRY_CONFIG.maxDelayMs);
-        attempt++;
-        continue;
-      }
-      
-      // Read and parse response
-      const text = await rawResponse.text();
-      let parsed: ApiResponse<T>;
-      try {
-        parsed = JSON.parse(text) as ApiResponse<T>;
-      } catch {
-        throw { message: 'Invalid JSON from server', status: rawResponse.status };
-      }
-      
-      // If HTTP error, throw with server message
-      if (!rawResponse.ok) {
-        const errMsg = parsed.message || `Request failed with status ${rawResponse.status}`;
-        
-        // If it's a rate limit error that wasn't caught by the status check
+        // If we get a rate limit error, retry with backoff
         if (rawResponse.status === 429) {
           if (attempt === DEFAULT_RETRY_CONFIG.maxRetries) {
-            throw { message: errMsg, status: rawResponse.status };
+            console.error(`Max retries (${DEFAULT_RETRY_CONFIG.maxRetries}) reached for rate-limited request`);
+            throw { message: "Rate limit exceeded. Please try again later.", status: 429 };
+          }
+          
+          console.log(`Rate limit hit. Retrying after ${delay}ms delay...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay = Math.min(delay * DEFAULT_RETRY_CONFIG.backoffFactor, DEFAULT_RETRY_CONFIG.maxDelayMs);
+          attempt++;
+          continue;
+        }
+        
+        // Read and parse response
+        const text = await rawResponse.text();
+        let parsed: ApiResponse<T>;
+        try {
+          parsed = JSON.parse(text) as ApiResponse<T>;
+        } catch {
+          throw { message: 'Invalid JSON from server', status: rawResponse.status };
+        }
+        
+        // If HTTP error, throw with server message
+        if (!rawResponse.ok) {
+          const errMsg = parsed.message || `Request failed with status ${rawResponse.status}`;
+          
+          // If it's a rate limit error that wasn't caught by the status check
+          if (rawResponse.status === 429) {
+            if (attempt === DEFAULT_RETRY_CONFIG.maxRetries) {
+              throw { message: errMsg, status: rawResponse.status };
+            }
+            
+            console.log(`Rate limit error. Retrying after ${delay}ms delay...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay = Math.min(delay * DEFAULT_RETRY_CONFIG.backoffFactor, DEFAULT_RETRY_CONFIG.maxDelayMs);
+            attempt++;
+            continue;
+          }
+          
+          throw { message: errMsg, status: rawResponse.status };
+        }
+        
+        // Return proper wrapper from server
+        return {
+          success: parsed.success,
+          message: parsed.message,
+          data: parsed.data
+        };
+      } catch (error) {
+        console.error('POST request error:', error);
+        
+        // Handle timeout errors
+        if (error instanceof Error && error.message === 'Request timeout') {
+          console.error('Request timed out');
+          throw { message: 'Request timed out. Please check your network connection and server status.', status: 408 };
+        }
+        
+        // If it's a rate limit error that we're handling with retries
+        if (typeof error === 'object' && error !== null && 'status' in error && (error as any).status === 429) {
+          if (attempt === DEFAULT_RETRY_CONFIG.maxRetries) {
+            throw error;
           }
           
           console.log(`Rate limit error. Retrying after ${delay}ms delay...`);
@@ -267,15 +350,8 @@ class ApiService {
           continue;
         }
         
-        throw { message: errMsg, status: rawResponse.status };
+        throw error;
       }
-      
-      // Return proper wrapper from server
-      return {
-        success: parsed.success,
-        message: parsed.message,
-        data: parsed.data
-      };
     }
     
     // This should never be reached due to the throw in the loop, but TypeScript needs it
@@ -287,17 +363,28 @@ class ApiService {
     let delay = DEFAULT_RETRY_CONFIG.initialDelayMs;
     
     while (attempt <= DEFAULT_RETRY_CONFIG.maxRetries) {
+      const url = `${this.baseURL}${endpoint}`;
+      const headers = await this.getHeaders();
+      
       try {
-        const url = `${this.baseURL}${endpoint}`;
-        const headers = await this.getHeaders();
-        
         console.log(`Making PUT request to: ${url} (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries + 1})`);
         
-        const response = await fetch(url, {
+        // Create a timeout promise
+        const timeoutPromise = new Promise<Response>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Request timeout'));
+          }, DEFAULT_RETRY_CONFIG.requestTimeout);
+        });
+
+        // Create the fetch promise
+        const fetchPromise = fetch(url, {
           method: 'PUT',
           headers,
           body: JSON.stringify(data)
         });
+
+        // Race the fetch against the timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
         
         // If we get a rate limit error, retry with backoff
         if (response.status === 429) {
@@ -314,8 +401,14 @@ class ApiService {
         }
         
         return this.handleResponse<T>(response, { url, method: 'PUT', headers, body: JSON.stringify(data) });
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('PUT request error:', error);
+        
+        // Handle timeout errors
+        if (error instanceof Error && error.message === 'Request timeout') {
+          console.error('Request timed out');
+          throw { message: 'Request timed out. Please check your network connection and server status.', status: 408 };
+        }
         
         // If it's a rate limit error that we're handling with retries
         if (typeof error === 'object' && error !== null && 'status' in error && (error as any).status === 429) {
@@ -351,18 +444,29 @@ class ApiService {
     let delay = DEFAULT_RETRY_CONFIG.initialDelayMs;
     
     while (attempt <= DEFAULT_RETRY_CONFIG.maxRetries) {
+      const url = `${this.baseURL}${endpoint}`;
+      const headers = await this.getHeaders();
+      const body = JSON.stringify(data);
+      
       try {
-        const url = `${this.baseURL}${endpoint}`;
-        const headers = await this.getHeaders();
-        const body = JSON.stringify(data);
-        
         console.log(`Making PATCH request to: ${url} (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries + 1})`);
         
-        const response = await fetch(url, {
+        // Create a timeout promise
+        const timeoutPromise = new Promise<Response>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Request timeout'));
+          }, DEFAULT_RETRY_CONFIG.requestTimeout);
+        });
+
+        // Create the fetch promise
+        const fetchPromise = fetch(url, {
           method: 'PATCH',
           headers,
           body
         });
+
+        // Race the fetch against the timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
         
         // If we get a rate limit error, retry with backoff
         if (response.status === 429) {
@@ -379,8 +483,14 @@ class ApiService {
         }
         
         return this.handleResponse<T>(response, { url, method: 'PATCH', headers, body });
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('PATCH request error:', error);
+        
+        // Handle timeout errors
+        if (error instanceof Error && error.message === 'Request timeout') {
+          console.error('Request timed out');
+          throw { message: 'Request timed out. Please check your network connection and server status.', status: 408 };
+        }
         
         // If it's a rate limit error that we're handling with retries
         if (typeof error === 'object' && error !== null && 'status' in error && (error as any).status === 429) {
@@ -416,16 +526,27 @@ class ApiService {
     let delay = DEFAULT_RETRY_CONFIG.initialDelayMs;
     
     while (attempt <= DEFAULT_RETRY_CONFIG.maxRetries) {
+      const url = `${this.baseURL}${endpoint}`;
+      const headers = await this.getHeaders();
+      
       try {
-        const url = `${this.baseURL}${endpoint}`;
-        const headers = await this.getHeaders();
-        
         console.log(`Making DELETE request to: ${url} (attempt ${attempt + 1}/${DEFAULT_RETRY_CONFIG.maxRetries + 1})`);
         
-        const response = await fetch(url, {
+        // Create a timeout promise
+        const timeoutPromise = new Promise<Response>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Request timeout'));
+          }, DEFAULT_RETRY_CONFIG.requestTimeout);
+        });
+
+        // Create the fetch promise
+        const fetchPromise = fetch(url, {
           method: 'DELETE',
           headers
         });
+
+        // Race the fetch against the timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
         
         // If we get a rate limit error, retry with backoff
         if (response.status === 429) {
@@ -442,8 +563,14 @@ class ApiService {
         }
         
         return this.handleResponse<T>(response, { url, method: 'DELETE', headers });
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('DELETE request error:', error);
+        
+        // Handle timeout errors
+        if (error instanceof Error && error.message === 'Request timeout') {
+          console.error('Request timed out');
+          throw { message: 'Request timed out. Please check your network connection and server status.', status: 408 };
+        }
         
         // If it's a rate limit error that we're handling with retries
         if (typeof error === 'object' && error !== null && 'status' in error && (error as any).status === 429) {

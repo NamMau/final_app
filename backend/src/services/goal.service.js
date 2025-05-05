@@ -119,42 +119,38 @@ exports.updateGoalProgress = async (goalId, { currentAmount, milestoneIndex, isA
       goal.milestones[milestoneIndex].isAchieved = isAchieved || false;
     }
     
-    // Lấy ngày hiện tại và ngày mục tiêu
+    //take today
     const today = new Date();
     const targetDate = new Date(goal.targetDate);
     
     // Check if goal is completed
     const progressPercentage = (goal.currentAmount / goal.targetAmount) * 100;
     
-    // Kiểm tra xem goal đã hoàn thành hay thất bại
+    //check if goal is pass
     const notificationService = require('./notification.service');
     
-    // Đảm bảo có userId hợp lệ
     const userId = goal.userId || goal.user;
     if (!userId) {
       console.warn('No valid userId found for goal:', goalId);
       throw new Error('No valid userId found for goal');
     }
     
-    // Nếu đạt 100% tiến độ và chưa được đánh dấu là hoàn thành
     if (progressPercentage >= 100 && goal.status !== 'completed') {
       goal.status = 'completed';
       
-      // Tạo thông báo chúc mừng với type hợp lệ
       await notificationService.createNotification({
         userId: userId,
         message: `Congratulations! You've reached your goal: ${goal.goalName}`,
-        type: 'goal_achieved', // Sử dụng giá trị enum hợp lệ
+        type: 'goal_achieved', 
         priority: 'high',
         status: 'unread',
         link: `/goals/${goal._id}`
       });
     } 
-    // Nếu đã quá hạn mà chưa hoàn thành và chưa được đánh dấu là thất bại
+    //if the not pass by the date is failed
     else if (targetDate < today && progressPercentage < 100 && goal.status !== 'failed') {
       goal.status = 'failed';
       
-      // Tạo thông báo thất bại
       await notificationService.createNotification({
         userId: userId,
         message: `Your goal "${goal.goalName}" has passed its deadline without completion.`,
@@ -164,9 +160,8 @@ exports.updateGoalProgress = async (goalId, { currentAmount, milestoneIndex, isA
         link: `/goals/${goal._id}`
       });
     }
-    // Nếu tiến độ < 100% và trước đây đã đánh dấu là hoàn thành
     else if (progressPercentage < 100 && goal.status === 'completed') {
-      // Nếu goal đã được đánh dấu là hoàn thành nhưng không còn nữa
+      
       goal.status = 'active';
     }
     
@@ -206,18 +201,16 @@ exports.checkMilestones = async (goalId) => {
         milestone.isAchieved = true;
         updated = true;
         
-        // Tạo thông báo đạt milestone với type hợp lệ
         await notificationService.createNotification({
           userId: userId,
           message: `You've reached a milestone for your goal "${goal.goalName}": ${milestone.description || `Milestone ${i + 1}`}`,
-          type: 'goal_achieved', // Sử dụng giá trị enum hợp lệ
+          type: 'goal_achieved', 
           priority: 'medium',
           status: 'unread',
           link: `/goals/${goal._id}`
         });
       }
       
-      // Nếu milestone đã quá hạn mà chưa đạt được, tạo thông báo nhắc nhở
       else if (!milestone.isAchieved && new Date(milestone.date) < today && goal.currentAmount < milestone.amount) {
         // Chỉ tạo thông báo nếu milestone chưa quá hạn quá 7 ngày
         const daysPassed = Math.floor((today - new Date(milestone.date)) / (1000 * 60 * 60 * 24));
@@ -225,7 +218,7 @@ exports.checkMilestones = async (goalId) => {
           await notificationService.createNotification({
             userId: userId,
             message: `A milestone for your goal "${goal.goalName}" has passed its due date. Keep pushing!`,
-            type: 'system', // Sử dụng giá trị enum hợp lệ
+            type: 'system', 
             priority: 'low',
             status: 'unread',
             link: `/goals/${goal._id}`

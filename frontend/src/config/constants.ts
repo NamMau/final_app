@@ -1,6 +1,13 @@
 // API Configuration
-//export const API_URL = 'http://192.168.1.5:4000/api';
-export const API_URL = 'http://192.168.11.242:4000/api';
+// Comment out the one you're not using and uncomment the one you want to use
+
+// Use ngrok URL for the backend - this allows your Expo app to reach your backend through the internet
+//export const API_URL = 'https://f00d-2001-ee0-8209-1109-28d5-8e30-9009-854d.ngrok-free.app/api';
+export const API_URL = 'https://3367-2001-ee0-8209-1109-99-2f89-e0a2-59b8.ngrok-free.app/api';
+//export const API_URL = 'http://172.18.208.1:4000/api';
+//export const API_URL = 'http://192.168.11.242:4000/api';
+
+// API Key
 export const API_KEY = 'super_secret_password';
 
 // Rate Limiting Configuration

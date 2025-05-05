@@ -125,27 +125,80 @@ export const billsService = {
   }): Promise<Bill[]> {
     try {
       console.log('Calling getBills API...');
-      const response = await apiService.get<Bill[]>(ENDPOINTS.BILLS.GET_ALL);
-      console.log('Raw API response:', response);
       
-      if (!response.data) {
-        console.log('No response.data');
-        return [];
+      // Build query parameters if filters are provided
+      let queryParams = '';
+      if (filters) {
+        const params = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined) {
+            params.append(key, String(value));
+          }
+        });
+        queryParams = params.toString();
       }
       
-      const bills = response.data;
-      console.log('API response data:', bills);
+      const url = queryParams ? `${ENDPOINTS.BILLS.GET_ALL}?${queryParams}` : ENDPOINTS.BILLS.GET_ALL;
+      console.log('Requesting bills from URL:', url);
       
-      if (!Array.isArray(bills)) {
-        console.log('Response is not an array');
-        return [];
+      // Make the API request with more conservative settings to avoid rate limiting
+      let attempt = 0;
+      const maxAttempts = 5;
+      const initialDelay = 2000; // 2 seconds
+      let delay = initialDelay;
+      
+      while (attempt < maxAttempts) {
+        try {
+          if (attempt > 0) {
+            console.log(`Retry attempt ${attempt}/${maxAttempts} after ${delay}ms delay`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay = Math.min(delay * 2, 15000); // Exponential backoff with max 15s delay
+          }
+          
+          const response = await apiService.get(url);
+          
+          // Check if response has the expected structure
+          if (!response) {
+            console.error('No response received');
+            attempt++;
+            continue;
+          }
+          
+          // Handle success response
+          if (response.success && response.data) {
+            const bills = response.data;
+            if (Array.isArray(bills)) {
+              console.log('Successfully loaded', bills.length, 'bills');
+              return bills;
+            } else {
+              console.error('Response data is not an array:', bills);
+              return [];
+            }
+          } else {
+            console.error('Invalid response structure:', response);
+            return [];
+          }
+        } catch (requestError: any) {
+          console.error(`Error on attempt ${attempt + 1}:`, requestError);
+          
+          // Specifically handle rate limit errors
+          if (requestError.status === 429) {
+            console.log('Rate limit exceeded, will retry with longer delay');
+            delay = Math.min(delay * 2, 30000); // Even longer delay for rate limit errors
+            attempt++;
+            continue;
+          }
+          
+          // For other errors, retry with normal backoff
+          attempt++;
+        }
       }
       
-      console.log('Parsed bills:', bills);
-      return bills;
+      console.error('Max retry attempts reached');
+      return [];
     } catch (error) {
-      console.error('Error getting bills:', error);
-      throw error;
+      console.error('Unexpected error in getBills:', error);
+      return [];
     }
   },
 

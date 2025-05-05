@@ -278,9 +278,9 @@ exports.recordLoanPayment = async (loanId, paymentIndex, paymentAmount, paymentD
       // Create a congratulatory notification
       const notificationService = require('./notification.service');
       await notificationService.createNotification({
-        userId: loan.userId, // Sửa: Sử dụng loan.userId thay vì loan.user
+        userId: loan.userId,
         message: `Congratulations! You've successfully paid off your loan: ${loan.loanName}`,
-        type: 'loan_payment', // Sửa: Sử dụng giá trị enum hợp lệ từ Notification model
+        type: 'loan_payment',
         priority: 'high',
         status: 'unread',
         link: `Loan/${loan._id}`

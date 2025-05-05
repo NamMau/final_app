@@ -176,7 +176,6 @@ class GoalService {
       const response = await apiService.put<any>(endpoint, progressData);
       console.log('Goal progress update response:', response);
       
-      // Trả về đúng cấu trúc GoalResponse
       return {
         success: true,
         data: response.data || {},

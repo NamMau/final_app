@@ -57,17 +57,71 @@ app.locals.upload = upload;
 //   credentials: true,
 //   maxAge: 86400 // 24 hours
 // };
+// Set up CORS to allow requests from ngrok and Expo
 const corsOptions = {
-  origin: true, // Allow all origins in development
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    // Allow specific origins
+    const allowedOrigins = [
+      'https://3897-2001-ee0-8209-1109-28d5-8e30-9009-854d.ngrok-free.app',
+      'https://f00d-2001-ee0-8209-1109-28d5-8e30-9009-854d.ngrok-free.app/api',
+      'https://3367-2001-ee0-8209-1109-99-2f89-e0a2-59b8.ngrok-free.app',
+      'http://y7evpj4-anonymous-4000.exp.direct',
+      'exp://y7evpj4-anonymous-4000.exp.direct'
+    ];
+    
+    // For development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('ngrok-free.app') || origin.includes('exp.direct')) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked request from:', origin);
+      callback(null, true); // Still allow for development
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'Accept', 'Origin', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  credentials: true,
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
+// Configure Helmet with settings optimized for development with external connections
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false,
+  xssFilter: true,
+  hsts: false,  // Disable HTTP Strict Transport Security for development
+  dnsPrefetchControl: false, // Allow DNS prefetching
+  frameguard: false, // Allow iframes for development
+  permittedCrossDomainPolicies: false, // Allow cross-domain policies
+  referrerPolicy: { policy: 'no-referrer-when-downgrade' } // Less restrictive referrer policy
 }));
+
+// Add additional headers for CORS and security
+app.use((req, res, next) => {
+  // Allow requests from any origin for development
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Accept, Origin, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Log request origin for debugging
+  console.log(`Request from origin: ${req.headers.origin || 'No origin'} to ${req.method} ${req.url}`);
+  
+  next();
+});
 
 
 app.use(morgan("dev"));
@@ -127,8 +181,10 @@ app.get("/", (req, res) => {
 // Global error handler
 app.use(globalErrorHandler);
 
-app.listen(PORT, () => {
+// Listen on all network interfaces (0.0.0.0) to allow external connections
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`🌐 Server is accessible at http://localhost:${PORT} and via network interfaces`);
 });
 
 module.exports = app;

@@ -19,7 +19,8 @@ exports.createBudget = async (req, res) => {
             alertThreshold 
         } = req.body;
         
-        console.log('Creating budget with data:', { userId, categoryID, name, amount, period, startDate, endDate, alertThreshold });
+        console.log('Creating budget with data:', { userId, categoryID, name, amount,
+         period, startDate, endDate, alertThreshold });
         
         const budget = await budgetService.createBudget({
             userId,

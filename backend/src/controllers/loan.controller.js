@@ -19,10 +19,8 @@ exports.createLoan = async (req, res) => {
         
         console.log('Controller received loan data:', req.body);
         
-        // Nếu không có remainingBalance, sử dụng loanAmount
         const actualRemainingBalance = remainingBalance || loanAmount;
         
-        // Tạo lịch thanh toán tự động nếu không có
         let actualPaymentSchedule = paymentSchedule;
         if (!actualPaymentSchedule || !Array.isArray(actualPaymentSchedule) || actualPaymentSchedule.length === 0) {
             console.log('Generating payment schedule automatically');
@@ -30,7 +28,7 @@ exports.createLoan = async (req, res) => {
             const startDateObj = new Date(startDate);
             const endDateObj = new Date(endDate);
             
-            // Tính số tháng giữa startDate và endDate
+            // calculate between startdate and enddate
             const monthDiff = (endDateObj.getFullYear() - startDateObj.getFullYear()) * 12 + 
                               (endDateObj.getMonth() - startDateObj.getMonth());
             
@@ -39,10 +37,10 @@ exports.createLoan = async (req, res) => {
             
             actualPaymentSchedule = [];
             
-            // Tạo lịch thanh toán hàng tháng
+            //generate payment schedule
             for (let i = 0; i < numPayments; i++) {
                 const dueDate = new Date(startDateObj);
-                dueDate.setMonth(dueDate.getMonth() + i + 1); // +1 vì kỳ thanh toán đầu tiên là 1 tháng sau startDate
+                dueDate.setMonth(dueDate.getMonth() + i + 1);
                 
                 actualPaymentSchedule.push({
                     dueDate,
